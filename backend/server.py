@@ -35,6 +35,15 @@ REP_FREEZE_PENALTY = 20
 REP_SLASH_PENALTY = 10
 SLASH_RATE = 0.5  # 50% of collateral
 PERMIT_SECRET = secrets.token_hex(32)
+AVAIRA_GRADES = [('AAA', 90, 100), ('AA', 80, 89), ('A', 70, 79), ('BBB', 60, 69), ('BB', 50, 59), ('B', 40, 49), ('CCC', 30, 39), ('D', 0, 29)]
+MISSION_FEE_AGENT = 0.85
+MISSION_FEE_UNDERWRITER = 0.10
+MISSION_FEE_PROTOCOL = 0.05
+SUBSCRIPTION_TIERS = {
+    'free': {'price': 0, 'max_agents': 1, 'features': ['basic_monitoring', 'community_rating']},
+    'growth': {'price': 200, 'max_agents': 10, 'features': ['enhanced_monitoring', 'verified_badge', 'priority_support']},
+    'enterprise': {'price': 2000, 'max_agents': -1, 'features': ['unlimited_agents', 'custom_risk', 'compliance_reports', 'dedicated_pool']}
+}
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -84,6 +93,22 @@ class FreezeRequest(BaseModel):
 class SlashRequest(BaseModel):
     reason: str
     amount: Optional[float] = None
+
+class UnderwriterCreate(BaseModel):
+    name: str
+    wallet_address: str = ""
+    capital_amount: float
+
+class MissionCreate(BaseModel):
+    agent_id: str
+    description: str
+    target_value: float
+    duration_hours: int = 24
+    risk_level: str = "medium"
+
+class MissionStake(BaseModel):
+    underwriter_id: str
+    amount: float
 
 # ─── HELPER FUNCTIONS ────────────────────────────────────────────
 def generate_eip712_permit(agent_id: str, execution_id: str, action: str, value: float, chain_id: str) -> Dict:
@@ -737,6 +762,234 @@ async def simulate_full_lifecycle():
         "final_agent_state": final_agent,
         "treasury_stats": treasury_stats,
         "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+# ─── AVAIRA SCORE ENGINE ─────────────────────────────────────────
+def calculate_avaira_score(agent: Dict) -> Dict:
+    total_ex = max(agent.get("total_executions", 0), 1)
+    success_rate = (agent.get("successful_executions", 0) / total_ex) * 100
+    base_rep = agent.get("reputation", INITIAL_REPUTATION)
+    collateral_ratio = min((agent.get("collateral_remaining", 0) / max(agent.get("collateral_amount", 1), 0.01)) * 100, 100)
+    complexity = min(agent.get("total_executions", 0) * 2, 100)
+    reg_date = agent.get("registered_at", datetime.now(timezone.utc).isoformat())
+    try:
+        days_on_network = (datetime.now(timezone.utc) - datetime.fromisoformat(reg_date.replace("Z", "+00:00"))).days
+    except Exception:
+        days_on_network = 0
+    time_score = min(days_on_network * 3, 100)
+    deviation_count = agent.get("failed_executions", 0)
+    deviation_score = max(100 - (deviation_count * 15), 0)
+    composite = (success_rate * 0.30 + (base_rep / 2) * 0.20 + collateral_ratio * 0.15 + complexity * 0.15 + time_score * 0.10 + deviation_score * 0.10)
+    grade = "D"
+    for g, low, high in AVAIRA_GRADES:
+        if low <= composite <= high:
+            grade = g
+            break
+    return {
+        "composite_score": round(composite, 1),
+        "grade": grade,
+        "factors": {
+            "success_rate": round(success_rate, 1),
+            "behavioral_consistency": round(base_rep / 2, 1),
+            "collateral_ratio": round(collateral_ratio, 1),
+            "mission_complexity": round(complexity, 1),
+            "time_on_network": round(time_score, 1),
+            "deviation_penalty": round(deviation_score, 1)
+        },
+        "weights": {"success_rate": 0.30, "behavioral_consistency": 0.20, "collateral_ratio": 0.15, "mission_complexity": 0.15, "time_on_network": 0.10, "deviation_penalty": 0.10}
+    }
+
+# ─── AVAIRA SCORE ENDPOINTS ─────────────────────────────────────
+@api_router.get("/agents/{agent_id}/score")
+async def get_agent_score(agent_id: str):
+    agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+    score = calculate_avaira_score(agent)
+    return {**score, "agent_id": agent_id, "agent_name": agent["name"], "status": agent["status"]}
+
+@api_router.get("/scores/all")
+async def get_all_scores():
+    agents = await db.agents.find({}, {"_id": 0}).to_list(200)
+    results = []
+    for agent in agents:
+        score = calculate_avaira_score(agent)
+        results.append({"agent_id": agent["id"], "agent_name": agent["name"], "status": agent["status"], "grade": score["grade"], "composite_score": score["composite_score"], "reputation": agent["reputation"]})
+    results.sort(key=lambda x: x["composite_score"], reverse=True)
+    return results
+
+# ─── UNDERWRITER ENDPOINTS ──────────────────────────────────────
+@api_router.post("/underwriters/register")
+async def register_underwriter(body: UnderwriterCreate):
+    if body.capital_amount < 0.5:
+        raise HTTPException(400, "Minimum capital is 0.5 AVAX")
+    uw = {
+        "id": str(uuid.uuid4()),
+        "name": body.name,
+        "wallet_address": body.wallet_address or ("0x" + secrets.token_hex(20)),
+        "capital_amount": body.capital_amount,
+        "capital_available": body.capital_amount,
+        "capital_staked": 0.0,
+        "total_earnings": 0.0,
+        "missions_underwritten": 0,
+        "missions_successful": 0,
+        "status": "active",
+        "registered_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.underwriters.insert_one(uw)
+    uw.pop("_id", None)
+    return uw
+
+@api_router.get("/underwriters")
+async def list_underwriters(limit: int = 100):
+    uws = await db.underwriters.find({}, {"_id": 0}).sort("total_earnings", -1).to_list(limit)
+    return uws
+
+@api_router.get("/underwriters/{uw_id}")
+async def get_underwriter(uw_id: str):
+    uw = await db.underwriters.find_one({"id": uw_id}, {"_id": 0})
+    if not uw:
+        raise HTTPException(404, "Underwriter not found")
+    return uw
+
+# ─── MISSION ENDPOINTS ──────────────────────────────────────────
+@api_router.post("/missions/create")
+async def create_mission(body: MissionCreate):
+    agent = await db.agents.find_one({"id": body.agent_id}, {"_id": 0})
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+    if agent["status"] != "active":
+        raise HTTPException(403, f"Agent is {agent['status']}")
+    score = calculate_avaira_score(agent)
+    mission = {
+        "id": str(uuid.uuid4()),
+        "agent_id": body.agent_id,
+        "agent_name": agent["name"],
+        "agent_grade": score["grade"],
+        "agent_score": score["composite_score"],
+        "description": body.description,
+        "target_value": body.target_value,
+        "duration_hours": body.duration_hours,
+        "risk_level": body.risk_level,
+        "status": "open",
+        "total_staked": 0.0,
+        "underwriters": [],
+        "fee_split": {"agent": MISSION_FEE_AGENT, "underwriter": MISSION_FEE_UNDERWRITER, "protocol": MISSION_FEE_PROTOCOL},
+        "result": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "settled_at": None
+    }
+    await db.missions.insert_one(mission)
+    mission.pop("_id", None)
+    return mission
+
+@api_router.get("/missions")
+async def list_missions(status: Optional[str] = None, limit: int = 100):
+    query = {}
+    if status:
+        query["status"] = status
+    missions = await db.missions.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return missions
+
+@api_router.get("/missions/{mission_id}")
+async def get_mission(mission_id: str):
+    mission = await db.missions.find_one({"id": mission_id}, {"_id": 0})
+    if not mission:
+        raise HTTPException(404, "Mission not found")
+    return mission
+
+@api_router.post("/missions/{mission_id}/stake")
+async def stake_on_mission(mission_id: str, body: MissionStake):
+    mission = await db.missions.find_one({"id": mission_id}, {"_id": 0})
+    if not mission:
+        raise HTTPException(404, "Mission not found")
+    if mission["status"] != "open":
+        raise HTTPException(400, "Mission not open for staking")
+    uw = await db.underwriters.find_one({"id": body.underwriter_id}, {"_id": 0})
+    if not uw:
+        raise HTTPException(404, "Underwriter not found")
+    if uw["capital_available"] < body.amount:
+        raise HTTPException(400, "Insufficient capital")
+    await db.underwriters.update_one({"id": body.underwriter_id}, {"$inc": {"capital_available": -body.amount, "capital_staked": body.amount}})
+    stake_entry = {"underwriter_id": body.underwriter_id, "underwriter_name": uw["name"], "amount": body.amount, "staked_at": datetime.now(timezone.utc).isoformat()}
+    await db.missions.update_one({"id": mission_id}, {"$push": {"underwriters": stake_entry}, "$inc": {"total_staked": body.amount}})
+    updated = await db.missions.find_one({"id": mission_id}, {"_id": 0})
+    return updated
+
+@api_router.post("/missions/{mission_id}/settle")
+async def settle_mission(mission_id: str, success: bool = True):
+    mission = await db.missions.find_one({"id": mission_id}, {"_id": 0})
+    if not mission:
+        raise HTTPException(404, "Mission not found")
+    if mission["status"] == "settled":
+        raise HTTPException(400, "Already settled")
+    total_value = mission["target_value"]
+    if success:
+        agent_payout = round(total_value * MISSION_FEE_AGENT, 6)
+        uw_total = round(total_value * MISSION_FEE_UNDERWRITER, 6)
+        protocol_fee = round(total_value * MISSION_FEE_PROTOCOL, 6)
+        for uw_stake in mission.get("underwriters", []):
+            share = uw_stake["amount"] / max(mission["total_staked"], 0.001)
+            earnings = round(uw_total * share, 6)
+            await db.underwriters.update_one({"id": uw_stake["underwriter_id"]}, {"$inc": {"capital_staked": -uw_stake["amount"], "capital_available": uw_stake["amount"] + earnings, "total_earnings": earnings, "missions_underwritten": 1, "missions_successful": 1}})
+        await update_reputation(mission["agent_id"], REP_SUCCESS_BONUS, f"Mission settled: {mission['description'][:40]}")
+        await db.missions.update_one({"id": mission_id}, {"$set": {"status": "settled", "result": "success", "settled_at": datetime.now(timezone.utc).isoformat()}})
+        rev_entry = {"id": str(uuid.uuid4()), "type": "underwriting", "mission_id": mission_id, "amount": protocol_fee, "timestamp": datetime.now(timezone.utc).isoformat()}
+        await db.revenue_events.insert_one(rev_entry)
+        return {"status": "settled", "result": "success", "agent_payout": agent_payout, "underwriter_payout": uw_total, "protocol_fee": protocol_fee}
+    else:
+        slash_total = mission["total_staked"] * 0.5
+        for uw_stake in mission.get("underwriters", []):
+            share = uw_stake["amount"] / max(mission["total_staked"], 0.001)
+            loss = round(slash_total * share, 6)
+            await db.underwriters.update_one({"id": uw_stake["underwriter_id"]}, {"$inc": {"capital_staked": -uw_stake["amount"], "capital_available": uw_stake["amount"] - loss, "missions_underwritten": 1}})
+        await update_reputation(mission["agent_id"], -REP_FAILURE_PENALTY, f"Mission failed: {mission['description'][:40]}")
+        await db.missions.update_one({"id": mission_id}, {"$set": {"status": "settled", "result": "failed", "settled_at": datetime.now(timezone.utc).isoformat()}})
+        return {"status": "settled", "result": "failed", "coverage_provided": slash_total}
+
+# ─── REVENUE STREAMS ENDPOINT ───────────────────────────────────
+@api_router.get("/revenue/streams")
+async def get_revenue_streams():
+    treasury = await get_treasury_stats()
+    uw_pipeline = [{"$match": {"type": "underwriting"}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}}]
+    uw_result = await db.revenue_events.aggregate(uw_pipeline).to_list(1)
+    uw_rev = uw_result[0]["total"] if uw_result else 0
+    uw_count = uw_result[0]["count"] if uw_result else 0
+    slash_pipeline = [{"$match": {"type": "slash"}}, {"$group": {"_id": None, "total": {"$sum": "$collateral_slashed"}}}]
+    slash_events = await db.freeze_events.find({"type": "slash"}, {"_id": 0}).to_list(200)
+    slash_rev = sum(e.get("collateral_slashed", 0) * 0.2 for e in slash_events)
+    agent_count = await db.agents.count_documents({})
+    reg_revenue = agent_count * 0
+    return {
+        "streams": [
+            {"name": "Transaction Fees", "description": "0.5% on every execution", "amount": round(treasury["total_fees"], 6), "transactions": treasury["transaction_count"], "icon": "zap"},
+            {"name": "Underwriting Spread", "description": "5% protocol fee on settled missions", "amount": round(uw_rev, 6), "transactions": uw_count, "icon": "shield"},
+            {"name": "Slashing Revenue", "description": "20% of slashed collateral", "amount": round(slash_rev, 6), "transactions": len(slash_events), "icon": "scissors"},
+            {"name": "Data & Analytics", "description": "API queries and insights subscriptions", "amount": 0, "transactions": 0, "icon": "database"}
+        ],
+        "total_revenue": round(treasury["total_fees"] + uw_rev + slash_rev, 6),
+        "subscription_tiers": SUBSCRIPTION_TIERS
+    }
+
+# ─── SDK DOCUMENTATION ENDPOINT ─────────────────────────────────
+@api_router.get("/sdk/docs")
+async def get_sdk_docs():
+    return {
+        "sdk_name": "AvairaSDK",
+        "languages": ["TypeScript", "Rust"],
+        "version": "1.0.0",
+        "install": {"typescript": "npm install @avaira/sdk", "rust": "cargo add avaira-sdk"},
+        "functions": [
+            {"name": "register", "description": "Register an AI agent with the AVAIRA protocol", "params": [{"name": "agentWallet", "type": "string"}, {"name": "config", "type": "AgentConfig"}], "returns": "Promise<AgentRegistration>",
+             "example": "const agent = await avaira.register(wallet.address, {\n  name: 'TradingBot-Alpha',\n  missionIntent: 'DeFi yield optimization',\n  collateral: '5.0',\n  riskEnvelope: {\n    maxTxValue: 10.0,\n    maxDailyTxns: 50,\n    allowedActions: ['swap', 'stake', 'transfer'],\n    maxSlippage: 0.05\n  }\n});"},
+            {"name": "declareIntent", "description": "Declare mission intent before executing", "params": [{"name": "missionPlan", "type": "MissionPlan"}], "returns": "Promise<MissionDeclaration>",
+             "example": "const mission = await avaira.declareIntent({\n  description: 'Rebalance AVAX/USDC LP position',\n  targetValue: 2.5,\n  duration: 24,\n  riskLevel: 'medium'\n});"},
+            {"name": "execute", "description": "Execute an action through AVAIRA's enforcement layer", "params": [{"name": "action", "type": "ExecutionAction"}], "returns": "Promise<ExecutionResult>",
+             "example": "const result = await avaira.execute({\n  action: 'swap',\n  target: '0xDEF1...abc',\n  value: 2.5,\n  data: swapCalldata\n});\n// AVAIRA validates risk envelope\n// Signs EIP-712 permit\n// Executes via ExecutionWallet\n// Deducts 0.5% fee\n// Updates reputation"},
+            {"name": "settle", "description": "Settle a completed mission", "params": [{"name": "missionId", "type": "string"}], "returns": "Promise<SettlementResult>",
+             "example": "const settlement = await avaira.settle(mission.id);\n// Agent earns 85% of mission value\n// Underwriters earn 10%\n// AVAIRA takes 5%\n// Reputation updated\n// Avaira Score recalculated"}
+        ],
+        "quick_start": "import { AvairaSDK } from '@avaira/sdk';\n\nconst avaira = new AvairaSDK({\n  apiKey: 'your-api-key',\n  network: 'fuji', // or 'mainnet'\n  chainId: 43113\n});\n\n// Register agent\nconst agent = await avaira.register(wallet, config);\n\n// Declare intent\nconst mission = await avaira.declareIntent(plan);\n\n// Execute (monitored by AVAIRA)\nconst result = await avaira.execute(action);\n\n// Settle\nconst settlement = await avaira.settle(mission.id);"
     }
 
 # ─── ROOT ────────────────────────────────────────────────────────

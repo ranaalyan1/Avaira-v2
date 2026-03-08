@@ -1,9 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import { Wallet, TrendingUp, ArrowUpRight, RefreshCw } from "lucide-react";
+import { Wallet, TrendingUp, ArrowUpRight, RefreshCw, Zap, Shield, Scissors, Database } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const STREAM_ICONS = { zap: Zap, shield: Shield, scissors: Scissors, database: Database };
+const STREAM_COLORS = ['#00F0FF', '#7000FF', '#FFD300', '#39FF14'];
 
 const CustomTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
@@ -19,15 +22,18 @@ const CustomTooltip = ({ active, payload }) => {
 export default function Treasury() {
   const [stats, setStats] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [revenueStreams, setRevenueStreams] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const [statsRes, txRes] = await Promise.all([
+      const [statsRes, txRes, revRes] = await Promise.all([
         axios.get(`${API}/treasury/stats`),
-        axios.get(`${API}/treasury/transactions`)
+        axios.get(`${API}/treasury/transactions`),
+        axios.get(`${API}/revenue/streams`)
       ]);
       setStats(statsRes.data);
       setTransactions(txRes.data);
+      setRevenueStreams(revRes.data);
     } catch (e) { console.error(e); }
   }, []);
 
@@ -91,6 +97,33 @@ export default function Treasury() {
             </div>
             <p className="font-heading font-bold text-xl text-foreground" data-testid="tx-count-value">{stats.transaction_count}</p>
             <p className="font-mono text-[10px] text-avaira-dim">fee events</p>
+          </div>
+        </div>
+      )}
+
+      {/* 4 Revenue Streams */}
+      {revenueStreams && (
+        <div className="mb-6">
+          <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-muted mb-3">Revenue Streams</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {revenueStreams.streams.map((stream, i) => {
+              const Icon = STREAM_ICONS[stream.icon] || Zap;
+              return (
+                <div key={stream.name} className="cyber-card p-4" data-testid={`stream-${i}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon size={14} style={{ color: STREAM_COLORS[i] }} strokeWidth={1.5} />
+                    <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">{stream.name}</span>
+                  </div>
+                  <p className="font-heading font-bold text-lg" style={{ color: STREAM_COLORS[i] }}>{stream.amount.toFixed(6)} AVAX</p>
+                  <p className="font-mono text-[10px] text-avaira-dim mt-1">{stream.description}</p>
+                  <p className="font-mono text-[10px] text-avaira-dim mt-0.5">{stream.transactions} events</p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 p-3 border border-avaira-cyan/20 bg-avaira-cyan/5">
+            <span className="font-mono text-xs text-avaira-muted">TOTAL PROTOCOL REVENUE: </span>
+            <span className="font-heading font-bold text-lg text-avaira-cyan">{revenueStreams.total_revenue.toFixed(6)} AVAX</span>
           </div>
         </div>
       )}

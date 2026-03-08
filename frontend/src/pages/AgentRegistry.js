@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+const GRADE_COLORS = { AAA: '#39FF14', AA: '#00F0FF', A: '#00F0FF', BBB: '#FFD300', BB: '#FFD300', B: '#FF8C00', CCC: '#FF003C', D: '#FF003C' };
+
 const StatusBadge = ({ status }) => {
   const styles = {
     active: "border-green-500/50 text-green-400 bg-green-500/10",
@@ -19,7 +21,8 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const AgentCard = ({ agent, onRefresh }) => {
+const AgentCard = ({ agent, onRefresh, scores }) => {
+  const score = scores.find(s => s.agent_id === agent.id);
   const handleToggleStatus = async () => {
     const newStatus = agent.status === "active" ? "paused" : "active";
     if (agent.status === "frozen") return toast.error("Cannot change status of frozen agent");
@@ -36,7 +39,14 @@ const AgentCard = ({ agent, onRefresh }) => {
     <div className="cyber-card corner-cut p-4" data-testid={`agent-card-${agent.id}`}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-heading font-bold text-base text-foreground uppercase tracking-tight">{agent.name}</h3>
-        <StatusBadge status={agent.status} />
+        <div className="flex items-center gap-2">
+          {score && (
+            <span className="font-heading font-bold text-sm px-2 py-0.5 border" style={{ borderColor: (GRADE_COLORS[score.grade] || '#858585') + '50', color: GRADE_COLORS[score.grade] || '#858585' }} data-testid={`grade-${agent.id}`}>
+              {score.grade}
+            </span>
+          )}
+          <StatusBadge status={agent.status} />
+        </div>
       </div>
       <div className="space-y-2 font-mono text-xs">
         <div className="flex justify-between">
@@ -81,6 +91,7 @@ const AgentCard = ({ agent, onRefresh }) => {
 
 export default function AgentRegistry() {
   const [agents, setAgents] = useState([]);
+  const [scores, setScores] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     name: "", wallet_address: "", collateral_amount: "1.0", mission_intent: "",
@@ -89,8 +100,12 @@ export default function AgentRegistry() {
 
   const fetchAgents = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/agents`);
-      setAgents(res.data);
+      const [aRes, sRes] = await Promise.all([
+        axios.get(`${API}/agents`),
+        axios.get(`${API}/scores/all`)
+      ]);
+      setAgents(aRes.data);
+      setScores(sRes.data);
     } catch (e) { console.error(e); }
   }, []);
 
@@ -186,7 +201,7 @@ export default function AgentRegistry() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {agents.map(agent => <AgentCard key={agent.id} agent={agent} onRefresh={fetchAgents} />)}
+          {agents.map(agent => <AgentCard key={agent.id} agent={agent} onRefresh={fetchAgents} scores={scores} />)}
         </div>
       )}
     </div>

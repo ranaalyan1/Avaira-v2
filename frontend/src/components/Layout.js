@@ -1,14 +1,16 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutDashboard, UserCheck, Workflow, ShieldOff, Wallet, TrendingUp, Code, Menu, X } from "lucide-react";
+import { LayoutDashboard, UserCheck, Workflow, ShieldOff, Wallet, TrendingUp, Code, Menu, X, Users, BookOpen, Home } from "lucide-react";
 import { useState } from "react";
 
 const NAV_ITEMS = [
-  { path: "/", label: "DASHBOARD", icon: LayoutDashboard },
+  { path: "/dashboard", label: "DASHBOARD", icon: LayoutDashboard },
   { path: "/agents", label: "AGENT REGISTRY", icon: UserCheck },
   { path: "/executions", label: "EXECUTION FLOW", icon: Workflow },
+  { path: "/underwriters", label: "UNDERWRITERS", icon: Users },
   { path: "/freeze", label: "FREEZE / SLASH", icon: ShieldOff },
   { path: "/treasury", label: "TREASURY", icon: Wallet },
   { path: "/reputation", label: "REPUTATION", icon: TrendingUp },
+  { path: "/sdk", label: "SDK DOCS", icon: BookOpen },
   { path: "/contracts", label: "CONTRACTS", icon: Code },
 ];
 
