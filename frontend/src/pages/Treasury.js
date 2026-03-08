@@ -1,0 +1,175 @@
+import { useEffect, useState, useCallback } from "react";
+import axios from "axios";
+import { Wallet, TrendingUp, ArrowUpRight, RefreshCw } from "lucide-react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const CustomTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-avaira-card border border-avaira-border p-2 font-mono text-xs">
+        {payload.map((p, i) => <p key={i} style={{ color: p.color || p.fill }}>{p.name}: {typeof p.value === 'number' ? p.value.toFixed(6) : p.value} AVAX</p>)}
+      </div>
+    );
+  }
+  return null;
+};
+
+export default function Treasury() {
+  const [stats, setStats] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [statsRes, txRes] = await Promise.all([
+        axios.get(`${API}/treasury/stats`),
+        axios.get(`${API}/treasury/transactions`)
+      ]);
+      setStats(statsRes.data);
+      setTransactions(txRes.data);
+    } catch (e) { console.error(e); }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const splitData = stats ? [
+    { name: 'TrustPool (75%)', value: stats.total_trust_pool },
+    { name: 'Revenue (25%)', value: stats.total_protocol_revenue }
+  ].filter(d => d.value > 0) : [];
+
+  const barData = transactions.slice(0, 20).reverse().map((tx, i) => ({
+    name: `TX${i + 1}`,
+    trust: tx.trust_pool_share,
+    revenue: tx.protocol_revenue_share,
+    total: tx.total_fee
+  }));
+
+  return (
+    <div data-testid="treasury-page">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">Treasury</h1>
+          <p className="font-mono text-xs text-avaira-muted mt-1">FEE COLLECTION & DISTRIBUTION</p>
+        </div>
+        <button data-testid="refresh-treasury-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-cyan hover:border-avaira-cyan transition-colors">
+          <RefreshCw size={14} />
+        </button>
+      </div>
+
+      {/* Stats */}
+      {stats && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="cyber-card p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Wallet size={14} className="text-avaira-cyan" strokeWidth={1.5} />
+              <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">Total Fees</span>
+            </div>
+            <p className="font-heading font-bold text-xl text-avaira-cyan" data-testid="total-fees-value">{stats.total_fees.toFixed(6)}</p>
+            <p className="font-mono text-[10px] text-avaira-dim">AVAX</p>
+          </div>
+          <div className="cyber-card p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp size={14} className="text-avaira-cyan" strokeWidth={1.5} />
+              <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">Trust Pool</span>
+            </div>
+            <p className="font-heading font-bold text-xl text-avaira-green" data-testid="trust-pool-value">{stats.total_trust_pool.toFixed(6)}</p>
+            <p className="font-mono text-[10px] text-avaira-dim">75% of fees</p>
+          </div>
+          <div className="cyber-card p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <ArrowUpRight size={14} className="text-avaira-purple" strokeWidth={1.5} />
+              <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">Protocol Revenue</span>
+            </div>
+            <p className="font-heading font-bold text-xl text-avaira-purple" data-testid="revenue-value">{stats.total_protocol_revenue.toFixed(6)}</p>
+            <p className="font-mono text-[10px] text-avaira-dim">25% of fees</p>
+          </div>
+          <div className="cyber-card p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Wallet size={14} className="text-avaira-yellow" strokeWidth={1.5} />
+              <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">Transactions</span>
+            </div>
+            <p className="font-heading font-bold text-xl text-foreground" data-testid="tx-count-value">{stats.transaction_count}</p>
+            <p className="font-mono text-[10px] text-avaira-dim">fee events</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Fee Split Pie */}
+        <div className="cyber-card p-4">
+          <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-muted mb-3">Fee Split</h2>
+          {splitData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={splitData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value" stroke="none">
+                    <Cell fill="#00F0FF" />
+                    <Cell fill="#7000FF" />
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex justify-center gap-6 mt-2">
+                {splitData.map((d, i) => (
+                  <div key={d.name} className="flex items-center gap-1.5">
+                    <div className="w-2 h-2" style={{ background: i === 0 ? '#00F0FF' : '#7000FF' }} />
+                    <span className="font-mono text-[10px] text-avaira-muted">{d.name}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="h-48 flex items-center justify-center">
+              <p className="font-mono text-xs text-avaira-dim">NO FEE DATA</p>
+            </div>
+          )}
+        </div>
+
+        {/* Fee Bar Chart */}
+        <div className="cyber-card p-4">
+          <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-muted mb-3">Fee History</h2>
+          {barData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={barData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                <XAxis dataKey="name" tick={{ fill: '#858585', fontSize: 9, fontFamily: 'JetBrains Mono' }} />
+                <YAxis tick={{ fill: '#858585', fontSize: 9, fontFamily: 'JetBrains Mono' }} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="trust" name="TrustPool" fill="#00F0FF" stackId="a" />
+                <Bar dataKey="revenue" name="Revenue" fill="#7000FF" stackId="a" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-48 flex items-center justify-center">
+              <p className="font-mono text-xs text-avaira-dim">NO DATA</p>
+            </div>
+          )}
+        </div>
+
+        {/* Transaction List */}
+        <div className="cyber-card p-4">
+          <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-muted mb-3">Recent Transactions</h2>
+          {transactions.length === 0 ? (
+            <p className="font-mono text-xs text-avaira-dim text-center py-8">NO TRANSACTIONS</p>
+          ) : (
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {transactions.slice(0, 15).map(tx => (
+                <div key={tx.id} className="p-2 hover:bg-white/[0.02] border-b border-white/[0.04]" data-testid={`treasury-tx-${tx.id}`}>
+                  <div className="flex justify-between font-mono text-xs">
+                    <span className="text-foreground">{tx.total_fee.toFixed(6)} AVAX</span>
+                    <span className="text-avaira-dim">{new Date(tx.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                  <div className="flex gap-4 mt-0.5 font-mono text-[10px]">
+                    <span className="text-avaira-cyan">TP: {tx.trust_pool_share.toFixed(6)}</span>
+                    <span className="text-avaira-purple">REV: {tx.protocol_revenue_share.toFixed(6)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
