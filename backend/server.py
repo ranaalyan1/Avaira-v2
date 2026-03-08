@@ -98,7 +98,7 @@ def generate_eip712_permit(agent_id: str, execution_id: str, action: str, value:
         "executionId": execution_id,
         "action": action,
         "value": str(value),
-        "nonce": secrets.randbelow(2**64),
+        "nonce": secrets.randbelow(2**31),
         "deadline": int(datetime.now(timezone.utc).timestamp()) + 300
     }
     payload = json.dumps({"domain": domain, "message": message}, sort_keys=True)
