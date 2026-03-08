@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Users, Wallet, TrendingUp, Shield, Plus, Zap, RefreshCw, CheckCircle, XCircle } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -106,7 +106,7 @@ export default function Underwriters() {
               </button>
             </DialogTrigger>
             <DialogContent className="bg-avaira-card border-avaira-border rounded-none max-w-md">
-              <DialogHeader><DialogTitle className="font-heading font-bold text-lg text-foreground uppercase tracking-tight">Create Mission</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle className="font-heading font-bold text-lg text-foreground uppercase tracking-tight">Create Mission</DialogTitle><DialogDescription className="font-mono text-[10px] text-avaira-dim">Declare a new mission for an agent to execute</DialogDescription></DialogHeader>
               <form onSubmit={handleCreateMission} className="space-y-3 mt-2" data-testid="create-mission-form">
                 <div>
                   <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Agent</label>
@@ -144,7 +144,7 @@ export default function Underwriters() {
               </button>
             </DialogTrigger>
             <DialogContent className="bg-avaira-card border-avaira-border rounded-none max-w-md">
-              <DialogHeader><DialogTitle className="font-heading font-bold text-lg text-foreground uppercase tracking-tight">Register Underwriter</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle className="font-heading font-bold text-lg text-foreground uppercase tracking-tight">Register Underwriter</DialogTitle><DialogDescription className="font-mono text-[10px] text-avaira-dim">Stake capital to underwrite agent missions</DialogDescription></DialogHeader>
               <form onSubmit={handleRegisterUW} className="space-y-3 mt-2" data-testid="register-uw-form">
                 <div>
                   <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Name</label>
@@ -286,7 +286,7 @@ export default function Underwriters() {
       {/* Stake Dialog */}
       <Dialog open={stakeOpen} onOpenChange={setStakeOpen}>
         <DialogContent className="bg-avaira-card border-avaira-border rounded-none max-w-md">
-          <DialogHeader><DialogTitle className="font-heading font-bold text-lg text-foreground uppercase tracking-tight">Stake on Mission</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-heading font-bold text-lg text-foreground uppercase tracking-tight">Stake on Mission</DialogTitle><DialogDescription className="font-mono text-[10px] text-avaira-dim">Back this mission with your capital</DialogDescription></DialogHeader>
           {selectedMission && (
             <form onSubmit={handleStake} className="space-y-3 mt-2" data-testid="stake-form">
               <p className="font-mono text-xs text-avaira-muted">{selectedMission.agent_name}: {selectedMission.description}</p>
