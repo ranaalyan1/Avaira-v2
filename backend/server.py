@@ -1,6 +1,7 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
@@ -8,11 +9,12 @@ import hashlib
 import hmac
 import json
 import secrets
+import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -182,6 +184,81 @@ async def record_treasury_transaction(execution_id: str, total_fee: float):
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     await db.treasury_transactions.insert_one(tx)
+
+# ─── AUTH ENDPOINTS ──────────────────────────────────────────────
+class SessionRequest(BaseModel):
+    session_id: str
+
+@api_router.post("/auth/session")
+async def create_auth_session(body: SessionRequest):
+    # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+            headers={"X-Session-ID": body.session_id}
+        )
+    if response.status_code != 200:
+        raise HTTPException(401, "Invalid session ID")
+    user_data = response.json()
+    email = user_data.get("email", "")
+    name = user_data.get("name", "")
+    picture = user_data.get("picture", "")
+    session_token = user_data.get("session_token", "")
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        user_id = existing["user_id"]
+        await db.users.update_one({"email": email}, {"$set": {"name": name, "picture": picture}})
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id,
+            "email": email,
+            "name": name,
+            "picture": picture,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    resp = JSONResponse({"user_id": user_id, "email": email, "name": name, "picture": picture})
+    resp.set_cookie("session_token", session_token, httponly=True, secure=True, samesite="none", path="/", max_age=7*24*60*60)
+    return resp
+
+@api_router.get("/auth/me")
+async def get_current_user(request: Request):
+    token = request.cookies.get("session_token")
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+    if not session:
+        raise HTTPException(401, "Invalid session")
+    expires_at = session["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(401, "Session expired")
+    user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(401, "User not found")
+    return user
+
+@api_router.post("/auth/logout")
+async def logout(request: Request):
+    token = request.cookies.get("session_token")
+    if token:
+        await db.user_sessions.delete_one({"session_token": token})
+    resp = JSONResponse({"message": "Logged out"})
+    resp.delete_cookie("session_token", path="/")
+    return resp
 
 # ─── AGENT ENDPOINTS ────────────────────────────────────────────
 @api_router.post("/agents/register")

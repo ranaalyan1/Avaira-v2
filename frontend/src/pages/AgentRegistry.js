@@ -135,7 +135,7 @@ export default function AgentRegistry() {
     }
   };
 
-  const InputField = ({ label, name, type = "text", placeholder }) => (
+  const renderInput = (label, name, type = "text", placeholder = "") => (
     <div>
       <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">{label}</label>
       <input
@@ -162,7 +162,7 @@ export default function AgentRegistry() {
           </button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <button data-testid="register-agent-btn" className="cyber-btn bg-avaira-cyan text-black px-4 py-2 font-heading text-sm flex items-center gap-2">
+              <button data-testid="register-agent-btn" className="cyber-btn bg-avaira-cyan text-white px-4 py-2 font-heading text-sm flex items-center gap-2">
                 <UserPlus size={14} /> REGISTER AGENT
               </button>
             </DialogTrigger>
@@ -171,20 +171,20 @@ export default function AgentRegistry() {
                 <DialogTitle className="font-heading font-bold text-lg text-foreground uppercase tracking-tight">Register New Agent</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleRegister} className="space-y-3 mt-2" data-testid="register-agent-form">
-                <InputField label="Agent Name" name="name" placeholder="TradingBot-Alpha" />
-                <InputField label="Wallet Address (optional)" name="wallet_address" placeholder="0x..." />
-                <InputField label="Collateral (AVAX)" name="collateral_amount" type="number" placeholder="1.0" />
-                <InputField label="Mission Intent" name="mission_intent" placeholder="DeFi yield optimization" />
+                {renderInput("Agent Name", "name", "text", "TradingBot-Alpha")}
+                {renderInput("Wallet Address (optional)", "wallet_address", "text", "0x...")}
+                {renderInput("Collateral (AVAX)", "collateral_amount", "number", "1.0")}
+                {renderInput("Mission Intent", "mission_intent", "text", "DeFi yield optimization")}
                 <div className="border-t border-avaira-border pt-3">
                   <p className="font-heading font-semibold text-xs uppercase tracking-wider text-avaira-cyan mb-2">Risk Envelope</p>
                   <div className="grid grid-cols-2 gap-3">
-                    <InputField label="Max TX Value" name="max_tx_value" type="number" />
-                    <InputField label="Max Daily TXNs" name="max_daily_txns" type="number" />
-                    <InputField label="Allowed Actions" name="allowed_actions" placeholder="transfer,swap,stake" />
-                    <InputField label="Max Slippage" name="max_slippage" type="number" />
+                    {renderInput("Max TX Value", "max_tx_value", "number")}
+                    {renderInput("Max Daily TXNs", "max_daily_txns", "number")}
+                    {renderInput("Allowed Actions", "allowed_actions", "text", "transfer,swap,stake")}
+                    {renderInput("Max Slippage", "max_slippage", "number")}
                   </div>
                 </div>
-                <button data-testid="submit-register-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-black py-2 font-heading text-sm mt-2">
+                <button data-testid="submit-register-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm mt-2">
                   REGISTER & STAKE COLLATERAL
                 </button>
               </form>

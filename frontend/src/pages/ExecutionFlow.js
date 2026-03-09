@@ -94,7 +94,7 @@ export default function ExecutionFlow() {
           </button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <button data-testid="new-execution-btn" className="cyber-btn bg-avaira-cyan text-black px-4 py-2 font-heading text-sm flex items-center gap-2">
+              <button data-testid="new-execution-btn" className="cyber-btn bg-avaira-cyan text-white px-4 py-2 font-heading text-sm flex items-center gap-2">
                 <Send size={14} /> NEW EXECUTION
               </button>
             </DialogTrigger>
@@ -152,7 +152,7 @@ export default function ExecutionFlow() {
                     className="w-full bg-black border border-white/20 focus:border-avaira-cyan text-white font-mono text-sm p-2 outline-none"
                   />
                 </div>
-                <button data-testid="submit-execution-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-black py-2 font-heading text-sm">
+                <button data-testid="submit-execution-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm">
                   SUBMIT EXECUTION REQUEST
                 </button>
               </form>

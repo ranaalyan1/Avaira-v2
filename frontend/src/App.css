@@ -24,7 +24,7 @@
 
 /* Glow effect */
 .glow-cyan {
-    filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.3));
+    filter: drop-shadow(0 0 8px rgba(232, 68, 68, 0.3));
 }
 .glow-green {
     filter: drop-shadow(0 0 8px rgba(57, 255, 20, 0.3));
@@ -60,19 +60,19 @@
     top: 0;
     bottom: 0;
     width: 2px;
-    background: linear-gradient(180deg, #00F0FF 0%, #333 100%);
+    background: linear-gradient(180deg, #E84444 0%, #333 100%);
 }
 .timeline-dot {
     width: 10px;
     height: 10px;
-    border: 2px solid #00F0FF;
+    border: 2px solid #E84444;
     background: #050505;
     position: relative;
     z-index: 1;
 }
 .timeline-dot.completed {
-    background: #00F0FF;
-    box-shadow: 0 0 8px #00F0FF;
+    background: #E84444;
+    box-shadow: 0 0 8px #E84444;
 }
 .timeline-dot.failed {
     border-color: #FF003C;

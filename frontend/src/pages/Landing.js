@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Shield, FileKey, Heart, Zap, TrendingUp, Lock, Database, Globe, ChevronRight, Code, Users, Wallet, ArrowRight } from "lucide-react";
+import { Shield, FileKey, Heart, Zap, TrendingUp, Lock, Database, Globe, ChevronRight, Code, Users, Wallet, ArrowRight, LogIn } from "lucide-react";
 
 const PILLARS = [
   { icon: TrendingUp, title: "RATE", subtitle: "The Moody's Function", color: "#00F0FF", desc: "Every AI agent gets an Avaira Score (AAA to D). No enterprise will trust an unrated agent. The rating becomes the standard.", stat: "$50B+ market" },
@@ -51,7 +51,7 @@ export default function Landing() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-avaira-bg/80 backdrop-blur-lg border-b border-avaira-border">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Shield size={20} className="text-avaira-cyan" strokeWidth={1.5} />
+            <img src="/logo.png" alt="AVAIRA" className="w-7 h-7" />
             <span className="font-heading font-bold text-xl text-avaira-cyan tracking-tight uppercase">AVAIRA</span>
           </div>
           <div className="flex items-center gap-4">
@@ -60,9 +60,16 @@ export default function Landing() {
             <a href="#revenue" className="font-mono text-xs text-avaira-muted hover:text-avaira-cyan transition-colors hidden sm:block">REVENUE</a>
             <a href="#sdk" className="font-mono text-xs text-avaira-muted hover:text-avaira-cyan transition-colors hidden sm:block">SDK</a>
             <button
+              data-testid="nav-login-btn"
+              onClick={() => navigate('/login')}
+              className="font-mono text-xs text-avaira-muted border border-avaira-border px-3 py-1.5 hover:border-avaira-cyan hover:text-avaira-cyan transition-colors hidden sm:flex items-center gap-1.5"
+            >
+              <LogIn size={12} /> SIGN IN
+            </button>
+            <button
               data-testid="launch-protocol-btn"
               onClick={() => navigate('/dashboard')}
-              className="cyber-btn bg-avaira-cyan text-black px-4 py-2 font-heading text-xs flex items-center gap-1.5"
+              className="cyber-btn bg-avaira-cyan text-white px-4 py-2 font-heading text-xs flex items-center gap-1.5"
             >
               LAUNCH PROTOCOL <ChevronRight size={14} />
             </button>
@@ -80,7 +87,7 @@ export default function Landing() {
           </div>
           <h1 className="font-heading font-bold text-4xl sm:text-5xl lg:text-6xl text-foreground uppercase tracking-tight leading-[1.1] max-w-4xl">
             The Trust Infrastructure for the{" "}
-            <span className="text-avaira-cyan" style={{ textShadow: '0 0 30px rgba(0,240,255,0.3)' }}>Autonomous Economy</span>
+            <span className="text-avaira-cyan" style={{ textShadow: '0 0 30px rgba(232,68,68,0.3)' }}>Autonomous Economy</span>
           </h1>
           <p className="font-body text-base sm:text-lg text-avaira-muted mt-6 max-w-2xl leading-relaxed">
             We rate, clear, and insure every AI agent transaction on-chain &mdash; so machines can manage billions and humans can sleep at night.
@@ -89,13 +96,17 @@ export default function Landing() {
             <button
               data-testid="hero-launch-btn"
               onClick={() => navigate('/dashboard')}
-              className="cyber-btn bg-avaira-cyan text-black px-6 py-3 font-heading text-sm flex items-center gap-2"
+              className="cyber-btn bg-avaira-cyan text-white px-6 py-3 font-heading text-sm flex items-center gap-2"
             >
               LAUNCH PROTOCOL <ArrowRight size={16} />
             </button>
-            <a href="#sdk" className="font-mono text-xs text-avaira-muted border border-avaira-border px-6 py-3 hover:border-avaira-cyan hover:text-avaira-cyan transition-colors">
-              VIEW SDK
-            </a>
+            <button
+              data-testid="hero-login-btn"
+              onClick={() => navigate('/login')}
+              className="font-mono text-xs text-avaira-muted border border-avaira-border px-6 py-3 hover:border-avaira-cyan hover:text-avaira-cyan transition-colors flex items-center gap-2"
+            >
+              <LogIn size={14} /> SIGN IN
+            </button>
           </div>
           <div className="grid grid-cols-3 gap-6 mt-16 max-w-lg">
             <div>
@@ -113,7 +124,7 @@ export default function Landing() {
           </div>
         </div>
         {/* Grid bg effect */}
-        <div className="absolute inset-0 -z-10" style={{ backgroundImage: 'linear-gradient(rgba(0,240,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,240,255,0.03) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+        <div className="absolute inset-0 -z-10" style={{ backgroundImage: 'linear-gradient(rgba(232,68,68,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(232,68,68,0.03) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
       </section>
 
       {/* Three Pillars */}
@@ -289,7 +300,7 @@ export default function Landing() {
           <button
             data-testid="cta-launch-btn"
             onClick={() => navigate('/dashboard')}
-            className="cyber-btn bg-avaira-cyan text-black px-8 py-3 font-heading text-sm mt-8 inline-flex items-center gap-2"
+            className="cyber-btn bg-avaira-cyan text-white px-8 py-3 font-heading text-sm mt-8 inline-flex items-center gap-2"
           >
             LAUNCH AVAIRA PROTOCOL <ArrowRight size={16} />
           </button>

@@ -139,7 +139,7 @@ export default function Underwriters() {
           </Dialog>
           <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
             <DialogTrigger asChild>
-              <button data-testid="register-uw-btn" className="cyber-btn bg-avaira-cyan text-black px-3 py-2 font-heading text-xs flex items-center gap-1.5">
+              <button data-testid="register-uw-btn" className="cyber-btn bg-avaira-cyan text-white px-3 py-2 font-heading text-xs flex items-center gap-1.5">
                 <Plus size={12} /> REGISTER UNDERWRITER
               </button>
             </DialogTrigger>
@@ -154,7 +154,7 @@ export default function Underwriters() {
                   <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Capital (AVAX)</label>
                   <input data-testid="uw-capital-input" type="number" step="0.1" value={uwForm.capital_amount} onChange={e => setUwForm(p => ({ ...p, capital_amount: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
                 </div>
-                <button data-testid="submit-uw-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-black py-2 font-heading text-sm">REGISTER & DEPOSIT</button>
+                <button data-testid="submit-uw-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm">REGISTER & DEPOSIT</button>
               </form>
             </DialogContent>
           </Dialog>
@@ -301,7 +301,7 @@ export default function Underwriters() {
                 <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Amount (AVAX)</label>
                 <input data-testid="stake-amount-input" type="number" step="0.1" value={stakeForm.amount} onChange={e => setStakeForm(p => ({ ...p, amount: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
               </div>
-              <button data-testid="submit-stake-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-black py-2 font-heading text-sm">STAKE CAPITAL</button>
+              <button data-testid="submit-stake-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm">STAKE CAPITAL</button>
             </form>
           )}
         </DialogContent>

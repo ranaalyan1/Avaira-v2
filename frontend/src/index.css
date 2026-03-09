@@ -10,8 +10,8 @@
         --card-foreground: 0 0% 88%;
         --popover: 0 0% 4%;
         --popover-foreground: 0 0% 88%;
-        --primary: 187 100% 50%;
-        --primary-foreground: 0 0% 0%;
+        --primary: 0 76% 59%;
+        --primary-foreground: 0 0% 100%;
         --secondary: 270 100% 50%;
         --secondary-foreground: 0 0% 98%;
         --muted: 0 0% 7%;
@@ -22,8 +22,8 @@
         --destructive-foreground: 0 0% 98%;
         --border: 0 0% 20%;
         --input: 0 0% 12%;
-        --ring: 187 100% 50%;
-        --chart-1: 187 100% 50%;
+        --ring: 0 76% 59%;
+        --chart-1: 0 76% 59%;
         --chart-2: 105 100% 54%;
         --chart-3: 270 100% 50%;
         --chart-4: 48 100% 50%;
@@ -61,7 +61,7 @@
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #0A0A0A; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 0; }
-::-webkit-scrollbar-thumb:hover { background: #00F0FF; }
+::-webkit-scrollbar-thumb:hover { background: #E84444; }
 
 /* Selection */
-::selection { background: rgba(0, 240, 255, 0.2); color: #00F0FF; }
+::selection { background: rgba(232, 68, 68, 0.2); color: #E84444; }

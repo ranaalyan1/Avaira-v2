@@ -93,7 +93,7 @@ export default function Dashboard() {
           data-testid="simulate-lifecycle-btn"
           onClick={runSimulation}
           disabled={simulating}
-          className="cyber-btn bg-avaira-cyan text-black px-4 py-2 font-heading text-sm flex items-center gap-2 disabled:opacity-50"
+          className="cyber-btn bg-avaira-cyan text-white px-4 py-2 font-heading text-sm flex items-center gap-2 disabled:opacity-50"
         >
           <Play size={14} />
           {simulating ? "SIMULATING..." : "SIMULATE LIFECYCLE"}
