@@ -3,7 +3,7 @@ import axios from "axios";
 import { TrendingUp, Trophy, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { API } from "@/lib/api";
 
 const CustomTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {

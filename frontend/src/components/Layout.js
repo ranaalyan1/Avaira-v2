@@ -113,6 +113,9 @@ export default function Layout() {
         <div className="p-6 md:p-8">
           <Outlet />
         </div>
+        <footer className="px-6 md:px-8 py-4 border-t border-avaira-border">
+          <p className="font-mono text-[10px] text-avaira-dim">AVAIRA Protocol | Avalanche Fuji | v1</p>
+        </footer>
       </main>
 
       {/* Mobile overlay */}

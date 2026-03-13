@@ -4,7 +4,7 @@ import { UserPlus, Shield, Zap, AlertTriangle, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { API } from "@/lib/api";
 
 const GRADE_COLORS = { AAA: '#39FF14', AA: '#00F0FF', A: '#00F0FF', BBB: '#FFD300', BB: '#FFD300', B: '#FF8C00', CCC: '#FF003C', D: '#FF003C' };
 

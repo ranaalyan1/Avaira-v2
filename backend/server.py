@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import ReturnDocument
 import os
 import logging
 import hashlib
@@ -16,6 +17,8 @@ from typing import List, Optional, Dict, Any
 import uuid
 import time
 import asyncio
+import re
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
@@ -24,8 +27,6 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
-
-app = FastAPI(title="AVAIRA Protocol API")
 api_router = APIRouter(prefix="/api")
 
 # ─── PROTOCOL CONSTANTS ─────────────────────────────────────────
@@ -63,6 +64,8 @@ PERMIT_SECRET = _get_required_env("PERMIT_SECRET")
 ADMIN_EMAILS = {email.strip().lower() for email in os.environ.get("ADMIN_EMAILS", "").split(",") if email.strip()}
 RATE_LIMIT_STATE: Dict[str, List[float]] = {}
 RATE_LIMIT_LOCK = asyncio.Lock()
+RATE_LIMIT_LAST_SWEEP = 0.0
+EVM_ADDRESS_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 
 
 def _get_client_ip(request: Request) -> str:
@@ -71,10 +74,24 @@ def _get_client_ip(request: Request) -> str:
     return "unknown"
 
 
+def _hash_session_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 async def enforce_rate_limit(request: Request, scope: str, limit: int, window_seconds: int, identity: Optional[str] = None):
+    global RATE_LIMIT_LAST_SWEEP
     now = time.time()
     key = f"{scope}:{identity or _get_client_ip(request)}"
     async with RATE_LIMIT_LOCK:
+        if now - RATE_LIMIT_LAST_SWEEP > 60:
+            stale_keys = []
+            for existing_key, existing_timestamps in RATE_LIMIT_STATE.items():
+                if not existing_timestamps or now - existing_timestamps[-1] > window_seconds:
+                    stale_keys.append(existing_key)
+            for stale_key in stale_keys:
+                RATE_LIMIT_STATE.pop(stale_key, None)
+            RATE_LIMIT_LAST_SWEEP = now
+
         timestamps = RATE_LIMIT_STATE.get(key, [])
         timestamps = [ts for ts in timestamps if now - ts < window_seconds]
         if len(timestamps) >= limit:
@@ -82,6 +99,41 @@ async def enforce_rate_limit(request: Request, scope: str, limit: int, window_se
             raise HTTPException(429, f"Rate limit exceeded. Retry in {retry_after} seconds")
         timestamps.append(now)
         RATE_LIMIT_STATE[key] = timestamps
+
+
+def is_valid_evm_address(address: str) -> bool:
+    return bool(EVM_ADDRESS_RE.match(address))
+
+
+async def ensure_indexes():
+    # Core lookup indexes to avoid collection scans in high-frequency APIs.
+    await db.agents.create_index("id", unique=True)
+    await db.agents.create_index([("status", 1), ("registered_at", -1)])
+    await db.agents.create_index("wallet_address")
+    await db.executions.create_index("id", unique=True)
+    await db.executions.create_index([("agent_id", 1), ("created_at", -1)])
+    await db.executions.create_index([("status", 1), ("created_at", -1)])
+    await db.freeze_events.create_index([("agent_id", 1), ("timestamp", -1)])
+    await db.reputation_history.create_index([("agent_id", 1), ("timestamp", -1)])
+    await db.treasury_transactions.create_index("execution_id")
+    await db.treasury_transactions.create_index("timestamp")
+    await db.missions.create_index("id", unique=True)
+    await db.missions.create_index([("status", 1), ("created_at", -1)])
+    await db.underwriters.create_index("id", unique=True)
+    await db.user_sessions.create_index("session_token_hash")
+    await db.user_sessions.create_index("expires_at")
+    await db.users.create_index("email", unique=True)
+    await db.permit_nonces.create_index("agent_id", unique=True)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await ensure_indexes()
+    yield
+    client.close()
+
+
+app = FastAPI(title="AVAIRA Protocol API", lifespan=lifespan)
 
 # ─── PYDANTIC MODELS ────────────────────────────────────────────
 class RiskEnvelope(BaseModel):
@@ -146,7 +198,18 @@ class MissionStake(BaseModel):
     amount: float
 
 # ─── HELPER FUNCTIONS ────────────────────────────────────────────
-def generate_eip712_permit(agent_id: str, execution_id: str, action: str, value: float, chain_id: str) -> Dict:
+async def _next_permit_nonce(agent_id: str) -> int:
+    nonce_doc = await db.permit_nonces.find_one_and_update(
+        {"agent_id": agent_id},
+        {"$inc": {"nonce": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+    return int(nonce_doc.get("nonce", 1))
+
+
+async def generate_eip712_permit(agent_id: str, execution_id: str, action: str, value: float, chain_id: str) -> Dict:
+    nonce = await _next_permit_nonce(agent_id)
     domain = {
         "name": "AVAIRA_ExecutionWallet",
         "version": "1",
@@ -158,7 +221,7 @@ def generate_eip712_permit(agent_id: str, execution_id: str, action: str, value:
         "executionId": execution_id,
         "action": action,
         "value": str(value),
-        "nonce": secrets.randbelow(2**31),
+        "nonce": nonce,
         "deadline": int(datetime.now(timezone.utc).timestamp()) + 300
     }
     payload = json.dumps({"domain": domain, "message": message}, sort_keys=True)
@@ -256,6 +319,7 @@ async def create_auth_session(body: SessionRequest, request: Request):
         raise HTTPException(401, "Invalid auth response: missing email")
     if not session_token:
         raise HTTPException(401, "Invalid auth response: missing session token")
+    session_token_hash = _hash_session_token(session_token)
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
         user_id = existing["user_id"]
@@ -271,7 +335,7 @@ async def create_auth_session(body: SessionRequest, request: Request):
         })
     await db.user_sessions.insert_one({
         "user_id": user_id,
-        "session_token": session_token,
+        "session_token_hash": session_token_hash,
         "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat()
     })
@@ -288,7 +352,7 @@ async def get_current_user(request: Request):
             token = auth_header.split(" ")[1]
     if not token:
         raise HTTPException(401, "Not authenticated")
-    session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+    session = await db.user_sessions.find_one({"session_token_hash": _hash_session_token(token)}, {"_id": 0})
     if not session:
         raise HTTPException(401, "Invalid session")
     expires_at = session["expires_at"]
@@ -302,6 +366,10 @@ async def get_current_user(request: Request):
     if not user:
         raise HTTPException(401, "User not found")
     return user
+
+
+async def require_authenticated_user(request: Request) -> Dict[str, Any]:
+    return await get_current_user(request)
 
 
 async def require_admin_user(request: Request) -> Dict[str, Any]:
@@ -319,16 +387,18 @@ async def require_admin_user(request: Request) -> Dict[str, Any]:
 async def logout(request: Request):
     token = request.cookies.get("session_token")
     if token:
-        await db.user_sessions.delete_one({"session_token": token})
+        await db.user_sessions.delete_one({"session_token_hash": _hash_session_token(token)})
     resp = JSONResponse({"message": "Logged out"})
     resp.delete_cookie("session_token", path="/")
     return resp
 
 # ─── AGENT ENDPOINTS ────────────────────────────────────────────
 @api_router.post("/agents/register")
-async def register_agent(body: AgentCreate):
+async def register_agent(body: AgentCreate, request: Request, _user: Dict[str, Any] = Depends(require_authenticated_user)):
     if body.collateral_amount < 0.1:
         raise HTTPException(400, "Minimum collateral is 0.1 AVAX")
+    if not is_valid_evm_address(body.wallet_address):
+        raise HTTPException(400, "Invalid wallet address format")
     agent = {
         "id": str(uuid.uuid4()),
         "name": body.name,
@@ -449,7 +519,7 @@ async def create_execution_request(body: ExecutionRequestCreate):
     })
 
     # Step 3: Sign EIP-712 permit
-    permit = generate_eip712_permit(body.agent_id, execution["id"], body.action, body.value, body.chain_id)
+    permit = await generate_eip712_permit(body.agent_id, execution["id"], body.action, body.value, body.chain_id)
     execution["permit"] = permit
     execution["status"] = "permit_signed"
     execution["lifecycle"].append({
@@ -872,7 +942,7 @@ async def simulate_full_lifecycle(request: Request, admin_user: Dict[str, Any] =
         mission_intent="Automated DeFi yield optimization on Avalanche",
         risk_envelope=RiskEnvelope(max_tx_value=10.0, max_daily_txns=50, allowed_actions=["transfer", "swap", "stake"], max_slippage=0.05)
     )
-    agent = await register_agent(agent_data)
+    agent = await register_agent(agent_data, request=request, _user=admin_user)
     steps.append({"step": 1, "action": "Agent Registered", "details": f"Agent '{agent['name']}' registered with {agent['collateral_amount']} AVAX collateral", "agent_id": agent["id"]})
 
     # Step 2: Submit valid execution
@@ -893,7 +963,12 @@ async def simulate_full_lifecycle(request: Request, admin_user: Dict[str, Any] =
     steps.append({"step": 4, "action": "Deviation Detected", "details": f"Action 'liquidate' outside risk envelope. Agent FROZEN.", "execution_id": execution3["id"], "status": execution3["status"]})
 
     # Step 5: Slash collateral
-    slash_result = await slash_agent(agent["id"], SlashRequest(reason="Repeated deviation from declared mission intent"))
+    slash_result = await slash_agent(
+        agent["id"],
+        SlashRequest(reason="Repeated deviation from declared mission intent"),
+        request=request,
+        admin_user=admin_user,
+    )
     steps.append({"step": 5, "action": "Collateral Slashed", "details": f"Slashed {slash_result['collateral_slashed']} AVAX. Remaining: {slash_result['collateral_remaining']} AVAX"})
 
     # Get final agent state
@@ -966,9 +1041,11 @@ async def get_all_scores():
 
 # ─── UNDERWRITER ENDPOINTS ──────────────────────────────────────
 @api_router.post("/underwriters/register")
-async def register_underwriter(body: UnderwriterCreate):
+async def register_underwriter(body: UnderwriterCreate, request: Request, _user: Dict[str, Any] = Depends(require_authenticated_user)):
     if body.capital_amount < 0.5:
         raise HTTPException(400, "Minimum capital is 0.5 AVAX")
+    if body.wallet_address and not is_valid_evm_address(body.wallet_address):
+        raise HTTPException(400, "Invalid wallet address format")
     uw = {
         "id": str(uuid.uuid4()),
         "name": body.name,
@@ -1064,10 +1141,18 @@ async def stake_on_mission(mission_id: str, body: MissionStake):
 
 @api_router.post("/missions/{mission_id}/settle")
 async def settle_mission(mission_id: str, request: Request, success: bool = True, admin_user: Dict[str, Any] = Depends(require_admin_user)):
-    mission = await db.missions.find_one({"id": mission_id}, {"_id": 0})
+    settled_at = datetime.now(timezone.utc).isoformat()
+    result_label = "success" if success else "failed"
+    mission = await db.missions.find_one_and_update(
+        {"id": mission_id, "status": {"$ne": "settled"}},
+        {"$set": {"status": "settled", "result": result_label, "settled_at": settled_at}},
+        projection={"_id": 0},
+        return_document=ReturnDocument.BEFORE,
+    )
     if not mission:
-        raise HTTPException(404, "Mission not found")
-    if mission["status"] == "settled":
+        exists = await db.missions.find_one({"id": mission_id}, {"_id": 0})
+        if not exists:
+            raise HTTPException(404, "Mission not found")
         raise HTTPException(400, "Already settled")
     total_value = mission["target_value"]
     if success:
@@ -1079,7 +1164,6 @@ async def settle_mission(mission_id: str, request: Request, success: bool = True
             earnings = round(uw_total * share, 6)
             await db.underwriters.update_one({"id": uw_stake["underwriter_id"]}, {"$inc": {"capital_staked": -uw_stake["amount"], "capital_available": uw_stake["amount"] + earnings, "total_earnings": earnings, "missions_underwritten": 1, "missions_successful": 1}})
         await update_reputation(mission["agent_id"], REP_SUCCESS_BONUS, f"Mission settled: {mission['description'][:40]}")
-        await db.missions.update_one({"id": mission_id}, {"$set": {"status": "settled", "result": "success", "settled_at": datetime.now(timezone.utc).isoformat()}})
         rev_entry = {"id": str(uuid.uuid4()), "type": "underwriting", "mission_id": mission_id, "amount": protocol_fee, "timestamp": datetime.now(timezone.utc).isoformat()}
         await db.revenue_events.insert_one(rev_entry)
         await record_admin_audit("mission_settle", admin_user, request, {"mission_id": mission_id, "success": True})
@@ -1091,7 +1175,6 @@ async def settle_mission(mission_id: str, request: Request, success: bool = True
             loss = round(slash_total * share, 6)
             await db.underwriters.update_one({"id": uw_stake["underwriter_id"]}, {"$inc": {"capital_staked": -uw_stake["amount"], "capital_available": uw_stake["amount"] - loss, "missions_underwritten": 1}})
         await update_reputation(mission["agent_id"], -REP_FAILURE_PENALTY, f"Mission failed: {mission['description'][:40]}")
-        await db.missions.update_one({"id": mission_id}, {"$set": {"status": "settled", "result": "failed", "settled_at": datetime.now(timezone.utc).isoformat()}})
         await record_admin_audit("mission_settle", admin_user, request, {"mission_id": mission_id, "success": False})
         return {"status": "settled", "result": "failed", "coverage_provided": slash_total}
 
@@ -1160,6 +1243,3 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()

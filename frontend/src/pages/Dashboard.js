@@ -4,7 +4,7 @@ import { Activity, Users, Zap, ShieldOff, Wallet, TrendingUp, Play, AlertTriangl
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { toast } from "sonner";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { API } from "@/lib/api";
 
 const StatCard = ({ icon: Icon, label, value, color, delay }) => (
   <div className={`cyber-card p-4 animate-slide-in stagger-${delay}`} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
@@ -39,8 +39,10 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [activity, setActivity] = useState([]);
   const [simulating, setSimulating] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
       const [statsRes, activityRes] = await Promise.all([
         axios.get(`${API}/dashboard/stats`),
@@ -50,6 +52,8 @@ export default function Dashboard() {
       setActivity(activityRes.data);
     } catch (e) {
       console.error("Dashboard fetch error:", e);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -58,14 +62,26 @@ export default function Dashboard() {
   const runSimulation = async () => {
     setSimulating(true);
     try {
-      const res = await axios.post(`${API}/simulate/lifecycle`);
+      const res = await axios.post(`${API}/simulate/lifecycle`, {}, { withCredentials: true });
       toast.success(`Simulation complete: ${res.data.steps.length} steps executed`);
       fetchData();
     } catch (e) {
-      toast.error("Simulation failed");
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        toast.error("Simulation requires an authenticated admin session");
+      } else {
+        toast.error("Simulation failed");
+      }
     }
     setSimulating(false);
   };
+
+  if (loading && !stats) {
+    return (
+      <div className="cyber-card p-6" data-testid="dashboard-loading">
+        <p className="font-mono text-xs text-avaira-muted uppercase tracking-wider">Loading dashboard data...</p>
+      </div>
+    );
+  }
 
   const pieData = stats ? [
     { name: 'Active', value: stats.active_agents || 0 },

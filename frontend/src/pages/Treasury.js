@@ -3,7 +3,7 @@ import axios from "axios";
 import { Wallet, TrendingUp, ArrowUpRight, RefreshCw, Zap, Shield, Scissors, Database } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { API } from "@/lib/api";
 
 const STREAM_ICONS = { zap: Zap, shield: Shield, scissors: Scissors, database: Database };
 const STREAM_COLORS = ['#00F0FF', '#7000FF', '#FFD300', '#39FF14'];

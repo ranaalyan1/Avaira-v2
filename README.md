@@ -200,6 +200,7 @@ ENABLE_HEALTH_CHECK=false
 - The simulation lifecycle endpoint is admin-gated to prevent public abuse/data spam
 - Privileged admin actions are written to an audit log with actor and request metadata
 - Lightweight rate limiting protects auth session creation and admin action endpoints
+- Session tokens are hashed at rest in the database (no plaintext token persistence)
 
 ---
 

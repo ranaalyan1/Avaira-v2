@@ -1,10 +1,11 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, useNavigate, useSearchParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate, useSearchParams, Navigate } from "react-router-dom";
 import { useEffect, useState, createContext, useContext, useCallback } from "react";
 import axios from "axios";
 import Layout from "@/components/Layout";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
+import NotFound from "@/pages/NotFound";
 import Dashboard from "@/pages/Dashboard";
 import AgentRegistry from "@/pages/AgentRegistry";
 import ExecutionFlow from "@/pages/ExecutionFlow";
@@ -15,11 +16,21 @@ import SmartContracts from "@/pages/SmartContracts";
 import Underwriters from "@/pages/Underwriters";
 import SDKDocs from "@/pages/SDKDocs";
 import { Toaster } from "sonner";
+import { API } from "@/lib/api";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
-export const AuthContext = createContext({ user: null, setUser: () => {}, logout: () => {} });
+export const AuthContext = createContext({ user: null, authReady: false, setUser: () => {}, logout: () => {} });
 export const useAuth = () => useContext(AuthContext);
+
+function ProtectedRoute({ children }) {
+  const { user, authReady } = useAuth();
+  if (!authReady) {
+    return <div className="p-6 font-mono text-xs text-avaira-muted">Checking session...</div>;
+  }
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
 
 function AuthCallbackHandler() {
   const [searchParams] = useSearchParams();
@@ -45,7 +56,13 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
-        <Route element={<Layout />}>
+        <Route
+          element={(
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          )}
+        >
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/agents" element={<AgentRegistry />} />
           <Route path="/executions" element={<ExecutionFlow />} />
@@ -56,6 +73,7 @@ function AppRoutes() {
           <Route path="/sdk" element={<SDKDocs />} />
           <Route path="/contracts" element={<SmartContracts />} />
         </Route>
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </>
   );
@@ -63,12 +81,14 @@ function AppRoutes() {
 
 function App() {
   const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
 
   const checkAuth = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/auth/me`, { withCredentials: true });
       setUser(res.data);
     } catch { /* not logged in */ }
+    finally { setAuthReady(true); }
   }, []);
 
   useEffect(() => { checkAuth(); }, [checkAuth]);
@@ -79,7 +99,7 @@ function App() {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, logout }}>
+    <AuthContext.Provider value={{ user, authReady, setUser, logout }}>
       <div className="min-h-screen bg-avaira-bg">
         <div className="noise-overlay" />
         <BrowserRouter>
