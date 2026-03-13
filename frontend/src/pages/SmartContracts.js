@@ -30,7 +30,20 @@ const ContractCard = ({ contract }) => {
           </div>
           <div>
             <h3 className="font-heading font-bold text-base text-foreground uppercase tracking-tight">{contract.name}</h3>
-            <p className="font-mono text-[10px] text-avaira-muted mt-0.5 truncate max-w-[300px]">{contract.address}</p>
+            <div className="mt-0.5 max-w-[300px]">
+              {contract.address && !contract.address.startsWith("Not") ? (
+                <a
+                  href={`https://testnet.snowtrace.io/address/${contract.address}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-xs text-avaira-primary hover:underline break-all"
+                >
+                  {contract.address} ->
+                </a>
+              ) : (
+                <span className="font-mono text-xs text-avaira-dim">{contract.address || "Not deployed"}</span>
+              )}
+            </div>
           </div>
         </div>
         {expanded ? <ChevronDown size={16} className="text-avaira-primary" /> : <ChevronRight size={16} className="text-avaira-muted" />}

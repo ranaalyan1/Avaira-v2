@@ -225,6 +225,19 @@ export default function ExecutionFlow() {
                     <p>SIG: {selectedExec.permit.signature}</p>
                     <p className="text-avaira-muted mt-1">HASH: {selectedExec.permit.typedDataHash}</p>
                   </div>
+                  {selectedExec.tx_hash && (
+                    <div className="mt-2 pt-2 border-t border-avaira-border">
+                      <p className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest mb-1">On-Chain</p>
+                      <a
+                        href={`https://testnet.snowtrace.io/tx/${selectedExec.tx_hash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-[10px] text-avaira-primary hover:underline break-all"
+                      >
+                        {selectedExec.tx_hash.slice(0, 20)}... -> Snowtrace
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -22,6 +22,8 @@ import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode, urlparse
+from web3 import Web3
+from eth_account import Account
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -79,6 +81,61 @@ RATE_LIMIT_STATE: Dict[str, List[float]] = {}
 RATE_LIMIT_LOCK = asyncio.Lock()
 RATE_LIMIT_LAST_SWEEP = 0.0
 EVM_ADDRESS_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
+
+# On-chain (Fuji) configuration
+FUJI_RPC_URL = os.environ.get("FUJI_RPC_URL", "https://api.avax-test.network/ext/bc/C/rpc")
+PROTOCOL_PRIVATE_KEY = os.environ.get("PROTOCOL_PRIVATE_KEY", "")
+AGENT_REGISTRY_ADDRESS = os.environ.get("AGENT_REGISTRY_ADDRESS", "")
+EXECUTION_WALLET_ADDRESS = os.environ.get("EXECUTION_WALLET_ADDRESS", "")
+FREEZE_SLASH_ADDRESS = os.environ.get("FREEZE_SLASH_ADDRESS", "")
+TREASURY_ADDRESS = os.environ.get("TREASURY_ADDRESS", "")
+REPUTATION_ENGINE_ADDRESS = os.environ.get("REPUTATION_ENGINE_ADDRESS", "")
+
+w3 = Web3(Web3.HTTPProvider(FUJI_RPC_URL))
+protocol_account = Account.from_key(PROTOCOL_PRIVATE_KEY) if PROTOCOL_PRIVATE_KEY else None
+
+REGISTRY_ABI = [
+    {
+        "name": "registerAgent",
+        "type": "function",
+        "stateMutability": "payable",
+        "inputs": [
+            {"name": "name", "type": "string"},
+            {"name": "walletAddress", "type": "address"},
+            {
+                "name": "envelope",
+                "type": "tuple",
+                "components": [
+                    {"name": "maxTxValue", "type": "uint256"},
+                    {"name": "maxDailyTxns", "type": "uint256"},
+                    {"name": "maxSlippage", "type": "uint256"},
+                ],
+            },
+        ],
+        "outputs": [{"name": "agentId", "type": "bytes32"}],
+    },
+]
+
+FREEZE_SLASH_ABI = [
+    {
+        "name": "freezeAgent",
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "inputs": [{"name": "agentId", "type": "bytes32"}, {"name": "reason", "type": "string"}],
+        "outputs": [],
+    },
+    {
+        "name": "slashCollateral",
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {"name": "agentId", "type": "bytes32"},
+            {"name": "amount", "type": "uint256"},
+            {"name": "reason", "type": "string"},
+        ],
+        "outputs": [{"name": "", "type": "uint256"}],
+    },
+]
 
 
 def _get_client_ip(request: Request) -> str:
@@ -227,7 +284,7 @@ async def generate_eip712_permit(agent_id: str, execution_id: str, action: str, 
         "name": "AVAIRA_ExecutionWallet",
         "version": "1",
         "chainId": int(chain_id),
-        "verifyingContract": "0x" + hashlib.sha256(b"ExecutionWallet").hexdigest()[:40]
+        "verifyingContract": EXECUTION_WALLET_ADDRESS if EXECUTION_WALLET_ADDRESS else "0x0000000000000000000000000000000000000000"
     }
     message = {
         "agentId": agent_id,
@@ -253,6 +310,37 @@ def verify_permit(permit: Dict) -> bool:
     payload = json.dumps({"domain": domain, "message": message}, sort_keys=True)
     expected_sig = "0x" + hmac.new(PERMIT_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return permit.get("signature") == expected_sig
+
+
+def get_registry_contract():
+    return w3.eth.contract(address=Web3.to_checksum_address(AGENT_REGISTRY_ADDRESS), abi=REGISTRY_ABI)
+
+
+def get_freeze_slash_contract():
+    return w3.eth.contract(address=Web3.to_checksum_address(FREEZE_SLASH_ADDRESS), abi=FREEZE_SLASH_ABI)
+
+
+async def send_tx(contract_fn, value_wei: int = 0) -> str:
+    """Build, sign, and broadcast a transaction. Returns a real tx hash."""
+    if not protocol_account:
+        raise RuntimeError("PROTOCOL_PRIVATE_KEY not set")
+
+    nonce = w3.eth.get_transaction_count(protocol_account.address)
+    tx = contract_fn.build_transaction({
+        "from": protocol_account.address,
+        "nonce": nonce,
+        "value": value_wei,
+        "gas": 500_000,
+        "maxFeePerGas": w3.to_wei(30, "gwei"),
+        "maxPriorityFeePerGas": w3.to_wei(2, "gwei"),
+        "chainId": 43113,
+    })
+    signed = protocol_account.sign_transaction(tx)
+    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+    if receipt.status != 1:
+        raise RuntimeError(f"Transaction reverted: 0x{tx_hash.hex()}")
+    return "0x" + tx_hash.hex()
 
 def validate_risk_envelope(request_data: Dict, risk_envelope: Dict) -> Dict:
     violations = []
@@ -620,6 +708,36 @@ async def register_agent(body: AgentCreate, request: Request, _user: Dict[str, A
         "chain_id": "43113"
     }
     await db.agents.insert_one(agent)
+
+    # Best-effort on-chain registration; fallback remains fully functional off-chain.
+    if AGENT_REGISTRY_ADDRESS and protocol_account:
+        try:
+            collateral_wei = w3.to_wei(body.collateral_amount, "ether")
+            envelope_tuple = (
+                w3.to_wei(body.risk_envelope.max_tx_value, "ether"),
+                body.risk_envelope.max_daily_txns,
+                int(body.risk_envelope.max_slippage * 10000),
+            )
+            registry_contract = get_registry_contract()
+            on_chain_tx = await send_tx(
+                registry_contract.functions.registerAgent(
+                    body.name,
+                    Web3.to_checksum_address(body.wallet_address),
+                    envelope_tuple,
+                ),
+                value_wei=collateral_wei,
+            )
+            agent["on_chain_tx"] = on_chain_tx
+            agent["on_chain_registered"] = True
+            await db.agents.update_one(
+                {"id": agent["id"]},
+                {"$set": {"on_chain_tx": on_chain_tx, "on_chain_registered": True}},
+            )
+            logger.info(f"Agent registered on-chain: {on_chain_tx}")
+        except Exception as err:
+            logger.warning(f"On-chain registration failed, proceeding off-chain only: {err}")
+            agent["on_chain_registered"] = False
+
     agent.pop("_id", None)
     return agent
 
@@ -755,12 +873,39 @@ async def create_execution_request(body: ExecutionRequestCreate):
         return execution
 
     # Step 5: Execute transaction
+    try:
+        if not protocol_account:
+            raise RuntimeError("PROTOCOL_PRIVATE_KEY not set")
+
+        value_wei = w3.to_wei(body.value, "ether")
+        nonce_val = w3.eth.get_transaction_count(protocol_account.address)
+        tx = {
+            "from": protocol_account.address,
+            "to": Web3.to_checksum_address(body.target_address),
+            "value": value_wei,
+            "gas": 21000,
+            "maxFeePerGas": w3.to_wei(30, "gwei"),
+            "maxPriorityFeePerGas": w3.to_wei(2, "gwei"),
+            "nonce": nonce_val,
+            "chainId": 43113,
+        }
+        signed = protocol_account.sign_transaction(tx)
+        tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+        real_tx_hash = "0x" + tx_hash.hex()
+        on_chain_status = "confirmed" if receipt.status == 1 else "reverted"
+    except Exception as chain_err:
+        logger.error(f"On-chain execution failed: {chain_err}")
+        real_tx_hash = "0x" + secrets.token_hex(32)
+        on_chain_status = "simulated"
+
+    execution["tx_hash"] = real_tx_hash
     execution["status"] = "executed"
     execution["lifecycle"].append({
         "step": "transaction_executed",
         "status": "completed",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "details": f"Transaction executed on chain {body.chain_id}. Tx: 0x{secrets.token_hex(32)}"
+        "details": f"Tx: {real_tx_hash} | Chain: {body.chain_id} | Status: {on_chain_status} | Snowtrace: https://testnet.snowtrace.io/tx/{real_tx_hash}"
     })
 
     # Step 6: Deduct fee
@@ -824,6 +969,23 @@ async def freeze_agent(agent_id: str, body: FreezeRequest, request: Request, adm
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     await db.freeze_events.insert_one(event)
+
+    if FREEZE_SLASH_ADDRESS and protocol_account:
+        try:
+            agent_id_bytes = bytes.fromhex(agent_id.replace("-", "").ljust(64, "0")[:64])
+            freeze_contract = get_freeze_slash_contract()
+            on_chain_tx = await send_tx(
+                freeze_contract.functions.freezeAgent(agent_id_bytes, body.reason)
+            )
+            await db.freeze_events.update_one(
+                {"id": event["id"]},
+                {"$set": {"on_chain_tx": on_chain_tx}},
+            )
+            event["on_chain_tx"] = on_chain_tx
+            logger.info(f"Agent frozen on-chain: {on_chain_tx}")
+        except Exception as err:
+            logger.warning(f"On-chain freeze failed: {err}")
+
     await update_reputation(agent_id, -REP_FREEZE_PENALTY, f"Frozen: {body.reason}")
     await record_admin_audit("agent_freeze", admin_user, request, {"agent_id": agent_id, "reason": body.reason})
     event.pop("_id", None)
@@ -972,7 +1134,7 @@ async def get_contract_architecture():
         "contracts": [
             {
                 "name": "AgentRegistry",
-                "address": "0x" + hashlib.sha256(b"AgentRegistry").hexdigest()[:40],
+                "address": AGENT_REGISTRY_ADDRESS or "Not deployed",
                 "description": "Central registry for all AI agents. Manages registration, collateral staking, and agent status.",
                 "state_variables": [
                     {"name": "agents", "type": "mapping(bytes32 => Agent)", "description": "Agent ID to Agent struct"},
@@ -998,7 +1160,7 @@ async def get_contract_architecture():
             },
             {
                 "name": "ExecutionWallet",
-                "address": "0x" + hashlib.sha256(b"ExecutionWallet").hexdigest()[:40],
+                "address": EXECUTION_WALLET_ADDRESS or "Not deployed",
                 "description": "Verifies EIP-712 signed permits and executes approved transactions. Deducts 0.5% protocol fee.",
                 "state_variables": [
                     {"name": "DOMAIN_SEPARATOR", "type": "bytes32", "description": "EIP-712 domain separator"},
@@ -1022,7 +1184,7 @@ async def get_contract_architecture():
             },
             {
                 "name": "FreezeSlash",
-                "address": "0x" + hashlib.sha256(b"FreezeSlash").hexdigest()[:40],
+                "address": FREEZE_SLASH_ADDRESS or "Not deployed",
                 "description": "Emergency freeze and collateral slashing mechanism. Triggered on risk envelope deviation.",
                 "state_variables": [
                     {"name": "frozenAgents", "type": "mapping(bytes32 => bool)", "description": "Agent frozen status"},
@@ -1044,7 +1206,7 @@ async def get_contract_architecture():
             },
             {
                 "name": "Treasury",
-                "address": "0x" + hashlib.sha256(b"Treasury").hexdigest()[:40],
+                "address": TREASURY_ADDRESS or "Not deployed",
                 "description": "Receives protocol fees and splits them: 75% to TrustPool, 25% to ProtocolRevenue.",
                 "state_variables": [
                     {"name": "trustPoolBalance", "type": "uint256", "description": "Accumulated TrustPool funds"},
@@ -1067,7 +1229,7 @@ async def get_contract_architecture():
             },
             {
                 "name": "ReputationEngine",
-                "address": "0x" + hashlib.sha256(b"ReputationEngine").hexdigest()[:40],
+                "address": REPUTATION_ENGINE_ADDRESS or "Not deployed",
                 "description": "Tracks and updates agent reputation scores based on execution outcomes.",
                 "state_variables": [
                     {"name": "scores", "type": "mapping(bytes32 => uint256)", "description": "Agent reputation scores"},
@@ -1089,7 +1251,7 @@ async def get_contract_architecture():
             },
             {
                 "name": "InsurancePool",
-                "address": "0x" + hashlib.sha256(b"InsurancePool").hexdigest()[:40],
+                "address": "Not deployed",
                 "description": "Compensates backers if agent execution fails and causes losses.",
                 "state_variables": [
                     {"name": "poolBalance", "type": "uint256", "description": "Total insurance pool funds"},

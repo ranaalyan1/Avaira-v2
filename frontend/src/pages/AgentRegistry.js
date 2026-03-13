@@ -80,14 +80,26 @@ const AgentCard = ({ agent, onRefresh, scores, canManage }) => {
         <span className="font-mono text-[10px] text-avaira-dim">
           {new Date(agent.registered_at).toLocaleDateString()}
         </span>
-        <button
-          data-testid={`toggle-status-${agent.id}`}
-          onClick={handleToggleStatus}
-          disabled={agent.status === "frozen" || !canManage}
-          className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors disabled:opacity-30"
-        >
-          {!canManage ? "ADMIN ONLY" : agent.status === "active" ? "PAUSE" : agent.status === "frozen" ? "FROZEN" : "ACTIVATE"}
-        </button>
+        <div className="flex items-center gap-3">
+          {agent.on_chain_tx && (
+            <a
+              href={`https://testnet.snowtrace.io/tx/${agent.on_chain_tx}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[10px] text-avaira-primary hover:underline"
+            >
+              ON-CHAIN ->
+            </a>
+          )}
+          <button
+            data-testid={`toggle-status-${agent.id}`}
+            onClick={handleToggleStatus}
+            disabled={agent.status === "frozen" || !canManage}
+            className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors disabled:opacity-30"
+          >
+            {!canManage ? "ADMIN ONLY" : agent.status === "active" ? "PAUSE" : agent.status === "frozen" ? "FROZEN" : "ACTIVATE"}
+          </button>
+        </div>
       </div>
     </div>
   );
