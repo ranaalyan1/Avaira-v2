@@ -174,9 +174,23 @@ MONGO_URL=mongodb+srv://<user>:<password>@cluster.mongodb.net/avaira
 PERMIT_SECRET=your_secret_key
 ADMIN_EMAILS=admin@example.com
 CORS_ORIGINS=http://localhost:3000
+ALLOWED_REDIRECT_ORIGINS=http://localhost:3000,https://avaira.xyz
+DEFAULT_POST_LOGIN_REDIRECT=http://localhost:3000/dashboard
+COOKIE_SECURE=false
+SESSION_MAX_AGE_SECONDS=604800
+
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:8001/api/auth/google/callback
+
+X_CLIENT_ID=your_x_client_id
+X_CLIENT_SECRET=your_x_client_secret
+X_REDIRECT_URI=http://localhost:8001/api/auth/x/callback
 ```
 
 `ADMIN_EMAILS` controls who can access privileged protocol actions (freeze, slash, status updates, mission settlement). If it is not set, those admin operations are blocked by design.
+
+Google and X authentication now run directly through AVAIRA backend OAuth callbacks (`/api/auth/google/*`, `/api/auth/x/*`) with no Emergent dependency.
 
 Frontend `.env`:
 

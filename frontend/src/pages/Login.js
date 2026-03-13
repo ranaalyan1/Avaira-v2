@@ -1,17 +1,17 @@
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { API } from "@/lib/api";
 
 export default function Login() {
   const navigate = useNavigate();
 
   const handleGoogleLogin = () => {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     const redirectUrl = window.location.origin + '/dashboard';
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+    window.location.href = `${API}/auth/google/login?redirect=${encodeURIComponent(redirectUrl)}`;
   };
 
   const handleXLogin = () => {
-    toast.info("X (Twitter) authentication coming soon");
+    const redirectUrl = window.location.origin + '/dashboard';
+    window.location.href = `${API}/auth/x/login?redirect=${encodeURIComponent(redirectUrl)}`;
   };
 
   return (

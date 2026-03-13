@@ -1,5 +1,5 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, useNavigate, useSearchParams, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState, createContext, useContext, useCallback } from "react";
 import axios from "axios";
 import Layout from "@/components/Layout";
@@ -32,27 +32,9 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-function AuthCallbackHandler() {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { setUser } = useAuth();
-
-  useEffect(() => {
-    const sessionId = searchParams.get("session_id");
-    if (sessionId) {
-      axios.post(`${API}/auth/session`, { session_id: sessionId }, { withCredentials: true })
-        .then(res => { setUser(res.data); navigate('/dashboard', { replace: true }); })
-        .catch(() => navigate('/login', { replace: true }));
-    }
-  }, [searchParams, navigate, setUser]);
-
-  return null;
-}
-
 function AppRoutes() {
   return (
     <>
-      <AuthCallbackHandler />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />

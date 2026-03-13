@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Query, Request, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ReturnDocument
 import os
@@ -11,6 +11,7 @@ import hmac
 import json
 import secrets
 import httpx
+import base64
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
@@ -20,6 +21,7 @@ import asyncio
 import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
+from urllib.parse import urlencode, urlparse
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -62,6 +64,17 @@ def _get_required_env(name: str) -> str:
 
 PERMIT_SECRET = _get_required_env("PERMIT_SECRET")
 ADMIN_EMAILS = {email.strip().lower() for email in os.environ.get("ADMIN_EMAILS", "").split(",") if email.strip()}
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
+COOKIE_SAMESITE = "none" if COOKIE_SECURE else "lax"
+SESSION_MAX_AGE_SECONDS = int(os.environ.get("SESSION_MAX_AGE_SECONDS", str(7 * 24 * 60 * 60)))
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "").strip()
+X_CLIENT_ID = os.environ.get("X_CLIENT_ID", "").strip()
+X_CLIENT_SECRET = os.environ.get("X_CLIENT_SECRET", "").strip()
+X_REDIRECT_URI = os.environ.get("X_REDIRECT_URI", "").strip()
+DEFAULT_POST_LOGIN_REDIRECT = os.environ.get("DEFAULT_POST_LOGIN_REDIRECT", "http://localhost:3000/dashboard").strip()
+ALLOWED_REDIRECT_ORIGINS = {origin.strip() for origin in os.environ.get("ALLOWED_REDIRECT_ORIGINS", "http://localhost:3000").split(",") if origin.strip()}
 RATE_LIMIT_STATE: Dict[str, List[float]] = {}
 RATE_LIMIT_LOCK = asyncio.Lock()
 RATE_LIMIT_LAST_SWEEP = 0.0
@@ -296,30 +309,68 @@ async def record_admin_audit(action: str, admin_user: Dict[str, Any], request: R
     await db.admin_audit_log.insert_one(entry)
 
 # ─── AUTH ENDPOINTS ──────────────────────────────────────────────
-class SessionRequest(BaseModel):
-    session_id: str
+def _base64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode().rstrip("=")
 
-@api_router.post("/auth/session")
-async def create_auth_session(body: SessionRequest, request: Request):
-    await enforce_rate_limit(request, "auth_session", limit=30, window_seconds=60)
-    # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": body.session_id}
-        )
-    if response.status_code != 200:
-        raise HTTPException(401, "Invalid session ID")
-    user_data = response.json()
-    email = user_data.get("email", "")
-    name = user_data.get("name", "")
-    picture = user_data.get("picture", "")
-    session_token = user_data.get("session_token", "")
-    if not email:
-        raise HTTPException(401, "Invalid auth response: missing email")
-    if not session_token:
-        raise HTTPException(401, "Invalid auth response: missing session token")
-    session_token_hash = _hash_session_token(session_token)
+
+def _base64url_decode(data: str) -> bytes:
+    padding = "=" * (-len(data) % 4)
+    return base64.urlsafe_b64decode(data + padding)
+
+
+def _is_allowed_redirect(target: str) -> bool:
+    parsed = urlparse(target)
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    return origin in ALLOWED_REDIRECT_ORIGINS
+
+
+def _resolve_post_login_redirect(redirect: Optional[str]) -> str:
+    target = (redirect or DEFAULT_POST_LOGIN_REDIRECT).strip()
+    if not _is_allowed_redirect(target):
+        raise HTTPException(400, "Invalid redirect target")
+    return target
+
+
+def _build_oauth_state(provider: str, redirect: str, code_verifier: Optional[str] = None) -> str:
+    payload: Dict[str, Any] = {
+        "provider": provider,
+        "redirect": redirect,
+        "exp": int(time.time()) + 600,
+        "nonce": secrets.token_urlsafe(12),
+    }
+    if code_verifier:
+        payload["cv"] = code_verifier
+    payload_raw = json.dumps(payload, separators=(",", ":")).encode()
+    payload_b64 = _base64url_encode(payload_raw)
+    sig = hmac.new(PERMIT_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{sig}"
+
+
+def _parse_oauth_state(state: str) -> Dict[str, Any]:
+    try:
+        payload_b64, sig = state.split(".", 1)
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid OAuth state") from exc
+    expected_sig = hmac.new(PERMIT_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected_sig):
+        raise HTTPException(400, "Invalid OAuth state signature")
+    try:
+        payload = json.loads(_base64url_decode(payload_b64).decode())
+    except Exception as exc:
+        raise HTTPException(400, "Invalid OAuth state payload") from exc
+    if int(payload.get("exp", 0)) < int(time.time()):
+        raise HTTPException(400, "OAuth state expired")
+    return payload
+
+
+def _pkce_challenge(code_verifier: str) -> str:
+    digest = hashlib.sha256(code_verifier.encode()).digest()
+    return _base64url_encode(digest)
+
+
+async def _create_local_session(email: str, name: str, picture: str) -> Dict[str, str]:
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
         user_id = existing["user_id"]
@@ -331,16 +382,168 @@ async def create_auth_session(body: SessionRequest, request: Request):
             "email": email,
             "name": name,
             "picture": picture,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
         })
+
+    session_token = secrets.token_urlsafe(48)
     await db.user_sessions.insert_one({
         "user_id": user_id,
-        "session_token_hash": session_token_hash,
-        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "session_token_hash": _hash_session_token(session_token),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    resp = JSONResponse({"user_id": user_id, "email": email, "name": name, "picture": picture})
-    resp.set_cookie("session_token", session_token, httponly=True, secure=True, samesite="none", path="/", max_age=7*24*60*60)
+    return {"user_id": user_id, "session_token": session_token, "email": email, "name": name, "picture": picture}
+
+
+def _set_session_cookie(resp: RedirectResponse, session_token: str):
+    resp.set_cookie(
+        "session_token",
+        session_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        path="/",
+        max_age=SESSION_MAX_AGE_SECONDS,
+    )
+
+
+def _require_google_oauth_config():
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET or not GOOGLE_REDIRECT_URI:
+        raise HTTPException(503, "Google OAuth is not configured")
+
+
+def _require_x_oauth_config():
+    if not X_CLIENT_ID or not X_CLIENT_SECRET or not X_REDIRECT_URI:
+        raise HTTPException(503, "X OAuth is not configured")
+
+
+@api_router.get("/auth/google/login")
+async def auth_google_login(redirect: Optional[str] = None):
+    _require_google_oauth_config()
+    target_redirect = _resolve_post_login_redirect(redirect)
+    state = _build_oauth_state("google", target_redirect)
+    params = urlencode({
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "access_type": "offline",
+        "prompt": "select_account",
+    })
+    return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
+
+
+@api_router.get("/auth/google/callback")
+async def auth_google_callback(code: str, state: str):
+    _require_google_oauth_config()
+    parsed_state = _parse_oauth_state(state)
+    if parsed_state.get("provider") != "google":
+        raise HTTPException(400, "OAuth provider mismatch")
+
+    async with httpx.AsyncClient(timeout=20) as http_client:
+        token_resp = await http_client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": GOOGLE_REDIRECT_URI,
+                "grant_type": "authorization_code",
+            },
+        )
+        if token_resp.status_code != 200:
+            raise HTTPException(401, "Google token exchange failed")
+        access_token = token_resp.json().get("access_token", "")
+        if not access_token:
+            raise HTTPException(401, "Google access token missing")
+
+        user_resp = await http_client.get(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if user_resp.status_code != 200:
+            raise HTTPException(401, "Google user profile fetch failed")
+        user_data = user_resp.json()
+
+    email = user_data.get("email", "")
+    name = user_data.get("name", "Google User")
+    picture = user_data.get("picture", "")
+    if not email:
+        raise HTTPException(401, "Google account email is required")
+
+    session = await _create_local_session(email=email, name=name, picture=picture)
+    resp = RedirectResponse(parsed_state["redirect"])
+    _set_session_cookie(resp, session["session_token"])
+    return resp
+
+
+@api_router.get("/auth/x/login")
+async def auth_x_login(redirect: Optional[str] = None):
+    _require_x_oauth_config()
+    target_redirect = _resolve_post_login_redirect(redirect)
+    code_verifier = secrets.token_urlsafe(64)
+    state = _build_oauth_state("x", target_redirect, code_verifier=code_verifier)
+    params = urlencode({
+        "response_type": "code",
+        "client_id": X_CLIENT_ID,
+        "redirect_uri": X_REDIRECT_URI,
+        "scope": "tweet.read users.read offline.access",
+        "state": state,
+        "code_challenge": _pkce_challenge(code_verifier),
+        "code_challenge_method": "S256",
+    })
+    return RedirectResponse(f"https://twitter.com/i/oauth2/authorize?{params}")
+
+
+@api_router.get("/auth/x/callback")
+async def auth_x_callback(code: str, state: str):
+    _require_x_oauth_config()
+    parsed_state = _parse_oauth_state(state)
+    if parsed_state.get("provider") != "x":
+        raise HTTPException(400, "OAuth provider mismatch")
+    code_verifier = parsed_state.get("cv", "")
+    if not code_verifier:
+        raise HTTPException(400, "Missing PKCE verifier")
+
+    async with httpx.AsyncClient(timeout=20) as http_client:
+        token_resp = await http_client.post(
+            "https://api.twitter.com/2/oauth2/token",
+            data={
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": X_REDIRECT_URI,
+                "code_verifier": code_verifier,
+                "client_id": X_CLIENT_ID,
+            },
+            auth=(X_CLIENT_ID, X_CLIENT_SECRET),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        if token_resp.status_code != 200:
+            raise HTTPException(401, "X token exchange failed")
+        access_token = token_resp.json().get("access_token", "")
+        if not access_token:
+            raise HTTPException(401, "X access token missing")
+
+        user_resp = await http_client.get(
+            "https://api.twitter.com/2/users/me?user.fields=profile_image_url,name,username",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if user_resp.status_code != 200:
+            raise HTTPException(401, "X profile fetch failed")
+        x_data = user_resp.json().get("data", {})
+
+    x_user_id = x_data.get("id", "")
+    username = x_data.get("username", "")
+    if not x_user_id or not username:
+        raise HTTPException(401, "X profile is incomplete")
+
+    email = f"x_{x_user_id}@x.avaira.local"
+    name = x_data.get("name") or username
+    picture = x_data.get("profile_image_url", "")
+    session = await _create_local_session(email=email, name=name, picture=picture)
+    resp = RedirectResponse(parsed_state["redirect"])
+    _set_session_cookie(resp, session["session_token"])
     return resp
 
 @api_router.get("/auth/me")
