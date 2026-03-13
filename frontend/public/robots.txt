@@ -1,14 +1,22 @@
 # AVAIRA Protocol - https://avaira.xyz
-# Execution Control Protocol for AI Agents
+# Public website content is crawlable.
 
 User-agent: *
 Allow: /
-
-# Sitemap
-Sitemap: https://avaira.xyz/sitemap.xml
-
-# Crawl-delay (optional, polite)
-Crawl-delay: 1
-
-# Disallow internal API paths
 Disallow: /api/
+
+# Major AI and search crawlers (explicitly allowed)
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+# Sitemap location
+Sitemap: https://avaira.xyz/sitemap.xml
