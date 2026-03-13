@@ -72,14 +72,14 @@ export default function FreezeSlash() {
   };
 
   return (
-    <div data-testid="freeze-slash-page">
+    <div className="animate-slide-in" data-testid="freeze-slash-page">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">Freeze & Slash</h1>
           <p className="font-mono text-xs text-avaira-muted mt-1">{frozenAgents.length} FROZEN / {events.length} EVENTS</p>
         </div>
         <div className="flex items-center gap-2">
-          <button data-testid="refresh-freeze-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-cyan hover:border-avaira-cyan transition-colors">
+          <button data-testid="refresh-freeze-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors">
             <RefreshCw size={14} />
           </button>
           {!isAdmin && <span className="font-mono text-[10px] text-avaira-dim uppercase tracking-wider">Admin Only Controls</span>}

@@ -115,7 +115,7 @@ export default function Dashboard() {
           data-testid="simulate-lifecycle-btn"
           onClick={runSimulation}
           disabled={simulating}
-          className="cyber-btn bg-avaira-cyan text-white px-4 py-2 font-heading text-sm flex items-center gap-2 disabled:opacity-50"
+          className="cyber-btn bg-avaira-primary text-white px-4 py-2 font-heading text-sm flex items-center gap-2 disabled:opacity-50"
         >
           <Play size={14} />
           {simulating ? "SIMULATING..." : "SIMULATE LIFECYCLE"}
@@ -139,7 +139,7 @@ export default function Dashboard() {
         {/* Activity Feed */}
         <div className="lg:col-span-2 cyber-card p-4">
           <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-muted mb-4 flex items-center gap-2">
-            <Activity size={14} className="text-avaira-cyan" /> Recent Activity
+            <Activity size={14} className="text-avaira-primary" /> Recent Activity
           </h2>
           {activity.length === 0 ? (
             <div className="text-center py-8">
@@ -169,7 +169,7 @@ export default function Dashboard() {
           {/* Agent Distribution */}
           <div className="cyber-card p-4">
             <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-muted mb-3 flex items-center gap-2">
-              <Users size={14} className="text-avaira-cyan" /> Distribution
+              <Users size={14} className="text-avaira-primary" /> Distribution
             </h2>
             {pieData.length > 0 ? (
               <ResponsiveContainer width="100%" height={160}>
@@ -198,7 +198,7 @@ export default function Dashboard() {
           {/* Treasury Split */}
           <div className="cyber-card p-4">
             <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-muted mb-3 flex items-center gap-2">
-              <Wallet size={14} className="text-avaira-cyan" /> Treasury Split
+              <Wallet size={14} className="text-avaira-primary" /> Treasury Split
             </h2>
             {treasuryData.length > 0 ? (
               <div className="space-y-2">

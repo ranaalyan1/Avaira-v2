@@ -26,8 +26,10 @@ const getRepColor = (score) => {
 export default function Reputation() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
       const [lbRes, histRes] = await Promise.all([
         axios.get(`${API}/reputation/leaderboard`),
@@ -35,7 +37,11 @@ export default function Reputation() {
       ]);
       setLeaderboard(lbRes.data);
       setHistory(histRes.data);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -47,16 +53,24 @@ export default function Reputation() {
   }));
 
   return (
-    <div data-testid="reputation-page">
+    <div className="animate-slide-in" data-testid="reputation-page">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">Reputation Engine</h1>
           <p className="font-mono text-xs text-avaira-muted mt-1">AGENT TRUST SCORES</p>
         </div>
-        <button data-testid="refresh-reputation-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-cyan hover:border-avaira-cyan transition-colors">
+        <button data-testid="refresh-reputation-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors">
           <RefreshCw size={14} />
         </button>
       </div>
+
+      {loading && leaderboard.length === 0 && history.length === 0 ? (
+        <div className="cyber-card p-12 text-center mb-4">
+          <TrendingUp size={40} className="text-avaira-dim mx-auto mb-3 animate-glow-pulse" strokeWidth={1} />
+          <p className="font-heading text-lg text-avaira-muted uppercase">Loading Reputation Data</p>
+          <p className="font-mono text-xs text-avaira-dim mt-1">Fetching leaderboard scores and change history</p>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Leaderboard */}
@@ -99,7 +113,7 @@ export default function Reputation() {
                         <td className="text-right" style={{ color: rate !== '-' && parseInt(rate) >= 80 ? '#39FF14' : rate !== '-' && parseInt(rate) >= 50 ? '#FFD300' : rate === '-' ? '#858585' : '#FF003C' }}>
                           {rate}{rate !== '-' ? '%' : ''}
                         </td>
-                        <td className="text-right text-avaira-cyan">{agent.collateral_remaining.toFixed(2)}</td>
+                        <td className="text-right text-avaira-primary">{agent.collateral_remaining.toFixed(2)}</td>
                       </tr>
                     );
                   })}

@@ -62,24 +62,24 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="AVAIRA" className="w-7 h-7" />
-            <span className="font-heading font-bold text-xl text-avaira-cyan tracking-tight uppercase">AVAIRA</span>
+            <span className="font-heading font-bold text-xl text-avaira-primary tracking-tight uppercase">AVAIRA</span>
           </div>
           <div className="flex items-center gap-4">
-            <a href="#pillars" className="font-mono text-xs text-avaira-muted hover:text-avaira-cyan transition-colors hidden sm:block">PROTOCOL</a>
-            <a href="#moats" className="font-mono text-xs text-avaira-muted hover:text-avaira-cyan transition-colors hidden sm:block">MOATS</a>
-            <a href="#revenue" className="font-mono text-xs text-avaira-muted hover:text-avaira-cyan transition-colors hidden sm:block">REVENUE</a>
-            <a href="#sdk" className="font-mono text-xs text-avaira-muted hover:text-avaira-cyan transition-colors hidden sm:block">SDK</a>
+            <a href="#pillars" className="font-mono text-xs text-avaira-muted hover:text-avaira-primary transition-colors hidden sm:block">PROTOCOL</a>
+            <a href="#moats" className="font-mono text-xs text-avaira-muted hover:text-avaira-primary transition-colors hidden sm:block">MOATS</a>
+            <a href="#revenue" className="font-mono text-xs text-avaira-muted hover:text-avaira-primary transition-colors hidden sm:block">REVENUE</a>
+            <a href="#sdk" className="font-mono text-xs text-avaira-muted hover:text-avaira-primary transition-colors hidden sm:block">SDK</a>
             <button
               data-testid="nav-login-btn"
               onClick={() => navigate('/login')}
-              className="font-mono text-xs text-avaira-muted border border-avaira-border px-3 py-1.5 hover:border-avaira-cyan hover:text-avaira-cyan transition-colors hidden sm:flex items-center gap-1.5"
+              className="font-mono text-xs text-avaira-muted border border-avaira-border px-3 py-1.5 hover:border-avaira-primary hover:text-avaira-primary transition-colors hidden sm:flex items-center gap-1.5"
             >
               <LogIn size={12} /> SIGN IN
             </button>
             <button
               data-testid="launch-protocol-btn"
               onClick={goToProtocol}
-              className="cyber-btn bg-avaira-cyan text-white px-4 py-2 font-heading text-xs flex items-center gap-1.5"
+              className="cyber-btn bg-avaira-primary text-white px-4 py-2 font-heading text-xs flex items-center gap-1.5"
             >
               LAUNCH PROTOCOL <ChevronRight size={14} />
             </button>
@@ -91,13 +91,13 @@ export default function Landing() {
       <section className="pt-32 pb-20 px-6 relative" data-testid="hero-section">
         <div className="max-w-5xl mx-auto">
           <div className="mb-4">
-            <span className="font-mono text-[10px] text-avaira-cyan tracking-[0.3em] border border-avaira-cyan/30 px-3 py-1 bg-avaira-cyan/5">
+            <span className="font-mono text-[10px] text-avaira-primary tracking-[0.3em] border border-avaira-primary/30 px-3 py-1 bg-avaira-primary/5">
               AVALANCHE L1 // EXECUTION CONTROL PROTOCOL
             </span>
           </div>
           <h1 className="font-heading font-bold text-4xl sm:text-5xl lg:text-6xl text-foreground uppercase tracking-tight leading-[1.1] max-w-4xl">
             The Trust Infrastructure for the{" "}
-            <span className="text-avaira-cyan" style={{ textShadow: '0 0 30px rgba(232,68,68,0.3)' }}>Autonomous Economy</span>
+            <span className="text-avaira-primary" style={{ textShadow: '0 0 30px rgba(232,68,68,0.3)' }}>Autonomous Economy</span>
           </h1>
           <p className="font-body text-base sm:text-lg text-avaira-muted mt-6 max-w-2xl leading-relaxed">
             We rate, clear, and insure every AI agent transaction on-chain &mdash; so machines can manage billions and humans can sleep at night.
@@ -106,21 +106,21 @@ export default function Landing() {
             <button
               data-testid="hero-launch-btn"
               onClick={goToProtocol}
-              className="cyber-btn bg-avaira-cyan text-white px-6 py-3 font-heading text-sm flex items-center gap-2"
+              className="cyber-btn bg-avaira-primary text-white px-6 py-3 font-heading text-sm flex items-center gap-2"
             >
               LAUNCH PROTOCOL <ArrowRight size={16} />
             </button>
             <button
               data-testid="hero-login-btn"
               onClick={() => navigate('/login')}
-              className="font-mono text-xs text-avaira-muted border border-avaira-border px-6 py-3 hover:border-avaira-cyan hover:text-avaira-cyan transition-colors flex items-center gap-2"
+              className="font-mono text-xs text-avaira-muted border border-avaira-border px-6 py-3 hover:border-avaira-primary hover:text-avaira-primary transition-colors flex items-center gap-2"
             >
               <LogIn size={14} /> SIGN IN
             </button>
           </div>
           <div className="grid grid-cols-3 gap-6 mt-16 max-w-lg">
             <div>
-              <p className="font-heading font-bold text-2xl text-avaira-cyan">{'<'}200ms</p>
+              <p className="font-heading font-bold text-2xl text-avaira-primary">{'<'}200ms</p>
               <p className="font-mono text-[10px] text-avaira-dim uppercase tracking-wider mt-1">Finality</p>
             </div>
             <div>
@@ -140,7 +140,7 @@ export default function Landing() {
       {/* Three Pillars */}
       <section id="pillars" className="py-20 px-6 border-t border-avaira-border" data-testid="pillars-section">
         <div className="max-w-6xl mx-auto">
-          <p className="font-mono text-[10px] text-avaira-cyan tracking-[0.3em] mb-3">THE PROTOCOL</p>
+          <p className="font-mono text-[10px] text-avaira-primary tracking-[0.3em] mb-3">THE PROTOCOL</p>
           <h2 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight mb-12">
             Three Functions. One Protocol.
           </h2>
@@ -166,7 +166,7 @@ export default function Landing() {
       {/* How it Works */}
       <section className="py-20 px-6 border-t border-avaira-border bg-avaira-card" data-testid="how-it-works-section">
         <div className="max-w-5xl mx-auto">
-          <p className="font-mono text-[10px] text-avaira-cyan tracking-[0.3em] mb-3">EXECUTION FLOW</p>
+          <p className="font-mono text-[10px] text-avaira-primary tracking-[0.3em] mb-3">EXECUTION FLOW</p>
           <h2 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight mb-10">
             How Every Transaction is Secured
           </h2>
@@ -179,8 +179,8 @@ export default function Landing() {
               { step: "05", label: "EXECUTE", desc: "On-chain settlement" },
               { step: "06", label: "SETTLE", desc: "Fees split 85/10/5" },
             ].map((s) => (
-              <div key={s.step} className="p-3 border border-avaira-border bg-avaira-bg relative group hover:border-avaira-cyan/50 transition-colors" data-testid={`step-${s.step}`}>
-                <span className="font-heading font-bold text-3xl text-avaira-cyan/20 group-hover:text-avaira-cyan/40 transition-colors">{s.step}</span>
+              <div key={s.step} className="p-3 border border-avaira-border bg-avaira-bg relative group hover:border-avaira-primary/50 transition-colors" data-testid={`step-${s.step}`}>
+                <span className="font-heading font-bold text-3xl text-avaira-primary/20 group-hover:text-avaira-primary/40 transition-colors">{s.step}</span>
                 <p className="font-heading font-bold text-sm text-foreground uppercase tracking-tight mt-1">{s.label}</p>
                 <p className="font-mono text-[10px] text-avaira-dim mt-0.5">{s.desc}</p>
               </div>
@@ -200,14 +200,14 @@ export default function Landing() {
       {/* Five Moats */}
       <section id="moats" className="py-20 px-6 border-t border-avaira-border" data-testid="moats-section">
         <div className="max-w-6xl mx-auto">
-          <p className="font-mono text-[10px] text-avaira-cyan tracking-[0.3em] mb-3">DEFENSIBILITY</p>
+          <p className="font-mono text-[10px] text-avaira-primary tracking-[0.3em] mb-3">DEFENSIBILITY</p>
           <h2 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight mb-10">
             Five Moats. Unkillable.
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {MOATS.map((m, i) => (
-              <div key={m.title} className="p-4 border border-avaira-border bg-avaira-card hover:border-avaira-cyan/30 transition-colors" data-testid={`moat-${i}`}>
-                <m.icon size={18} className="text-avaira-cyan mb-3" strokeWidth={1.5} />
+              <div key={m.title} className="p-4 border border-avaira-border bg-avaira-card hover:border-avaira-primary/30 transition-colors" data-testid={`moat-${i}`}>
+                <m.icon size={18} className="text-avaira-primary mb-3" strokeWidth={1.5} />
                 <h3 className="font-heading font-bold text-sm text-foreground uppercase tracking-tight">{m.title}</h3>
                 <p className="font-mono text-[10px] text-avaira-muted mt-2 leading-relaxed">{m.desc}</p>
               </div>
@@ -219,7 +219,7 @@ export default function Landing() {
       {/* Revenue */}
       <section id="revenue" className="py-20 px-6 border-t border-avaira-border bg-avaira-card" data-testid="revenue-section">
         <div className="max-w-5xl mx-auto">
-          <p className="font-mono text-[10px] text-avaira-cyan tracking-[0.3em] mb-3">REVENUE ARCHITECTURE</p>
+          <p className="font-mono text-[10px] text-avaira-primary tracking-[0.3em] mb-3">REVENUE ARCHITECTURE</p>
           <h2 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight mb-10">
             Four Revenue Streams From Day 1
           </h2>
@@ -242,18 +242,18 @@ export default function Landing() {
                     <td className="text-right text-avaira-green">{r.year5}</td>
                   </tr>
                 ))}
-                <tr className="border-t-2 border-avaira-cyan/30">
-                  <td className="text-avaira-cyan font-bold">TOTAL</td>
+                <tr className="border-t-2 border-avaira-primary/30">
+                  <td className="text-avaira-primary font-bold">TOTAL</td>
                   <td></td>
-                  <td className="text-right text-avaira-cyan font-bold">$4M</td>
-                  <td className="text-right text-avaira-cyan font-bold">$770M</td>
+                  <td className="text-right text-avaira-primary font-bold">$4M</td>
+                  <td className="text-right text-avaira-primary font-bold">$770M</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div className="mt-6 p-4 border border-avaira-cyan/20 bg-avaira-cyan/5">
+          <div className="mt-6 p-4 border border-avaira-primary/20 bg-avaira-primary/5">
             <p className="font-mono text-xs text-avaira-muted">
-              At 10x revenue multiple (standard for high-growth SaaS with network effects): <span className="text-avaira-cyan font-bold">$7.7B valuation by Year 5</span>
+              At 10x revenue multiple (standard for high-growth SaaS with network effects): <span className="text-avaira-primary font-bold">$7.7B valuation by Year 5</span>
             </p>
           </div>
         </div>
@@ -262,7 +262,7 @@ export default function Landing() {
       {/* SDK */}
       <section id="sdk" className="py-20 px-6 border-t border-avaira-border" data-testid="sdk-section">
         <div className="max-w-5xl mx-auto">
-          <p className="font-mono text-[10px] text-avaira-cyan tracking-[0.3em] mb-3">DEVELOPER EXPERIENCE</p>
+          <p className="font-mono text-[10px] text-avaira-primary tracking-[0.3em] mb-3">DEVELOPER EXPERIENCE</p>
           <h2 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight mb-3">
             4 Function Calls. That's It.
           </h2>
@@ -272,16 +272,16 @@ export default function Landing() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-black border border-avaira-border p-5 overflow-x-auto">
               <div className="flex items-center gap-2 mb-3">
-                <Code size={14} className="text-avaira-cyan" />
+                <Code size={14} className="text-avaira-primary" />
                 <span className="font-mono text-[10px] text-avaira-dim uppercase tracking-widest">TypeScript</span>
               </div>
               <pre className="font-mono text-xs text-avaira-green whitespace-pre leading-relaxed">{SDK_CODE}</pre>
             </div>
             <div className="space-y-3">
               {["register", "declareIntent", "execute", "settle"].map((fn, i) => (
-                <div key={fn} className="p-3 border border-avaira-border hover:border-avaira-cyan/30 transition-colors">
+                <div key={fn} className="p-3 border border-avaira-border hover:border-avaira-primary/30 transition-colors">
                   <div className="flex items-center gap-2">
-                    <span className="font-heading font-bold text-sm text-avaira-cyan">0{i + 1}</span>
+                    <span className="font-heading font-bold text-sm text-avaira-primary">0{i + 1}</span>
                     <span className="font-mono text-sm text-foreground">.{fn}()</span>
                   </div>
                   <p className="font-mono text-[10px] text-avaira-dim mt-1">
@@ -301,7 +301,7 @@ export default function Landing() {
       <section className="py-20 px-6 border-t border-avaira-border bg-avaira-card" data-testid="cta-section">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">
-            Build It. Own the Position. <span className="text-avaira-cyan">Never Let Go.</span>
+            Build It. Own the Position. <span className="text-avaira-primary">Never Let Go.</span>
           </h2>
           <p className="font-body text-base text-avaira-muted mt-4 max-w-xl mx-auto">
             The reason this becomes a billion-dollar company is not because the technology is revolutionary.
@@ -310,7 +310,7 @@ export default function Landing() {
           <button
             data-testid="cta-launch-btn"
             onClick={goToProtocol}
-            className="cyber-btn bg-avaira-cyan text-white px-8 py-3 font-heading text-sm mt-8 inline-flex items-center gap-2"
+            className="cyber-btn bg-avaira-primary text-white px-8 py-3 font-heading text-sm mt-8 inline-flex items-center gap-2"
           >
             LAUNCH AVAIRA PROTOCOL <ArrowRight size={16} />
           </button>
@@ -321,8 +321,8 @@ export default function Landing() {
       <footer className="py-8 px-6 border-t border-avaira-border">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Shield size={16} className="text-avaira-cyan" strokeWidth={1.5} />
-            <span className="font-heading font-bold text-sm text-avaira-cyan uppercase">AVAIRA</span>
+            <Shield size={16} className="text-avaira-primary" strokeWidth={1.5} />
+            <span className="font-heading font-bold text-sm text-avaira-primary uppercase">AVAIRA</span>
             <span className="font-mono text-[9px] text-avaira-dim ml-2">AVALANCHE L1</span>
           </div>
           <div className="text-right">

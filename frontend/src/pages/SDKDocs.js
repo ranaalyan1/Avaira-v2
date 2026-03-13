@@ -15,7 +15,7 @@ const CopyBtn = ({ text }) => {
     });
   };
   return (
-    <button data-testid="copy-btn" onClick={handle} className="p-1 text-avaira-muted hover:text-avaira-cyan transition-colors">
+    <button data-testid="copy-btn" onClick={handle} className="p-1 text-avaira-muted hover:text-avaira-primary transition-colors">
       {copied ? <Check size={12} className="text-avaira-green" /> : <Copy size={12} />}
     </button>
   );
@@ -46,7 +46,7 @@ export default function SDKDocs() {
   );
 
   return (
-    <div data-testid="sdk-docs-page">
+    <div className="animate-slide-in" data-testid="sdk-docs-page">
       <div className="mb-6">
         <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">SDK Documentation</h1>
         <p className="font-mono text-xs text-avaira-muted mt-1">INTEGRATE IN 4 FUNCTION CALLS</p>
@@ -56,14 +56,14 @@ export default function SDKDocs() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="cyber-card p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Terminal size={14} className="text-avaira-cyan" />
+            <Terminal size={14} className="text-avaira-primary" />
             <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">TypeScript Installation</span>
           </div>
           <CodeBlock code={docs.install.typescript} lang="bash" />
         </div>
         <div className="cyber-card p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Terminal size={14} className="text-avaira-cyan" />
+            <Terminal size={14} className="text-avaira-primary" />
             <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">Rust Installation</span>
           </div>
           <CodeBlock code={docs.install.rust} lang="bash" />
@@ -72,7 +72,7 @@ export default function SDKDocs() {
 
       {/* Quick Start */}
       <div className="cyber-card p-4 mb-6">
-        <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-cyan mb-3 flex items-center gap-2">
+        <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-primary mb-3 flex items-center gap-2">
           <Code size={14} /> Quick Start
         </h2>
         <CodeBlock code={docs.quick_start} lang="typescript" />
@@ -89,14 +89,14 @@ export default function SDKDocs() {
               data-testid={`sdk-func-${fn.name}`}
               onClick={() => setActiveFunc(i)}
               className={`w-full text-left p-3 border transition-colors flex items-center justify-between ${
-                activeFunc === i ? 'border-avaira-cyan bg-avaira-cyan/5 text-avaira-cyan' : 'border-avaira-border text-avaira-muted hover:border-avaira-cyan/30 hover:text-foreground'
+                activeFunc === i ? 'border-avaira-primary bg-avaira-primary/5 text-avaira-primary' : 'border-avaira-border text-avaira-muted hover:border-avaira-primary/30 hover:text-foreground'
               }`}
             >
               <div>
                 <p className="font-mono text-sm">.{fn.name}()</p>
                 <p className="font-mono text-[10px] text-avaira-dim mt-0.5">{fn.description}</p>
               </div>
-              <ChevronRight size={14} className={activeFunc === i ? 'text-avaira-cyan' : 'text-avaira-dim'} />
+              <ChevronRight size={14} className={activeFunc === i ? 'text-avaira-primary' : 'text-avaira-dim'} />
             </button>
           ))}
         </div>
@@ -106,7 +106,7 @@ export default function SDKDocs() {
           {docs.functions[activeFunc] && (
             <div data-testid="sdk-func-detail">
               <div className="flex items-center gap-3 mb-4">
-                <span className="font-heading font-bold text-2xl text-avaira-cyan">.{docs.functions[activeFunc].name}()</span>
+                <span className="font-heading font-bold text-2xl text-avaira-primary">.{docs.functions[activeFunc].name}()</span>
               </div>
               <p className="font-body text-sm text-avaira-muted mb-4">{docs.functions[activeFunc].description}</p>
 
@@ -116,7 +116,7 @@ export default function SDKDocs() {
                 <div className="space-y-1">
                   {docs.functions[activeFunc].params.map((p, i) => (
                     <div key={i} className="flex items-center gap-3 p-2 bg-black/40">
-                      <code className="font-mono text-xs text-avaira-cyan">{p.name}</code>
+                      <code className="font-mono text-xs text-avaira-primary">{p.name}</code>
                       <code className="font-mono text-[10px] text-avaira-purple">{p.type}</code>
                     </div>
                   ))}
@@ -151,7 +151,7 @@ export default function SDKDocs() {
             <p className="font-mono text-[10px] text-avaira-dim mt-1">The AI agent earns the majority of the mission value</p>
           </div>
           <div className="p-3 border border-avaira-border">
-            <p className="font-heading font-bold text-lg text-avaira-cyan">10%</p>
+            <p className="font-heading font-bold text-lg text-avaira-primary">10%</p>
             <p className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest mt-0.5">Underwriter Yield</p>
             <p className="font-mono text-[10px] text-avaira-dim mt-1">Human underwriters earn yield for backing the mission</p>
           </div>

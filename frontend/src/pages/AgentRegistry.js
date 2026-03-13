@@ -59,7 +59,7 @@ const AgentCard = ({ agent, onRefresh, scores, canManage }) => {
         </div>
         <div className="flex justify-between">
           <span className="text-avaira-muted">COLLATERAL</span>
-          <span className="text-avaira-cyan">{agent.collateral_remaining.toFixed(4)} / {agent.collateral_amount.toFixed(4)}</span>
+          <span className="text-avaira-primary">{agent.collateral_remaining.toFixed(4)} / {agent.collateral_amount.toFixed(4)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-avaira-muted">REPUTATION</span>
@@ -84,7 +84,7 @@ const AgentCard = ({ agent, onRefresh, scores, canManage }) => {
           data-testid={`toggle-status-${agent.id}`}
           onClick={handleToggleStatus}
           disabled={agent.status === "frozen" || !canManage}
-          className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 border border-avaira-border text-avaira-muted hover:text-avaira-cyan hover:border-avaira-cyan transition-colors disabled:opacity-30"
+          className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors disabled:opacity-30"
         >
           {!canManage ? "ADMIN ONLY" : agent.status === "active" ? "PAUSE" : agent.status === "frozen" ? "FROZEN" : "ACTIVATE"}
         </button>
@@ -98,6 +98,7 @@ export default function AgentRegistry() {
   const isAdmin = !!user?.is_admin;
   const [agents, setAgents] = useState([]);
   const [scores, setScores] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     name: "", wallet_address: "", collateral_amount: "1.0", mission_intent: "",
@@ -105,6 +106,7 @@ export default function AgentRegistry() {
   });
 
   const fetchAgents = useCallback(async () => {
+    setLoading(true);
     try {
       const [aRes, sRes] = await Promise.all([
         axios.get(`${API}/agents`),
@@ -112,7 +114,11 @@ export default function AgentRegistry() {
       ]);
       setAgents(aRes.data);
       setScores(sRes.data);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchAgents(); }, [fetchAgents]);
@@ -158,25 +164,25 @@ export default function AgentRegistry() {
         placeholder={placeholder}
         min={min}
         required={name === "name" || name === "mission_intent"}
-        className="w-full bg-black border border-white/20 focus:border-avaira-cyan text-white font-mono text-sm p-2 outline-none transition-colors"
+        className="w-full bg-black border border-white/20 focus:border-avaira-primary text-white font-mono text-sm p-2 outline-none transition-colors"
       />
     </div>
   );
 
   return (
-    <div data-testid="agent-registry-page">
+    <div className="animate-slide-in" data-testid="agent-registry-page">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">Agent Registry</h1>
           <p className="font-mono text-xs text-avaira-muted mt-1">{agents.length} AGENTS REGISTERED</p>
         </div>
         <div className="flex items-center gap-2">
-          <button data-testid="refresh-agents-btn" onClick={fetchAgents} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-cyan hover:border-avaira-cyan transition-colors">
+          <button data-testid="refresh-agents-btn" onClick={fetchAgents} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors">
             <RefreshCw size={14} />
           </button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <button data-testid="register-agent-btn" className="cyber-btn bg-avaira-cyan text-white px-4 py-2 font-heading text-sm flex items-center gap-2">
+              <button data-testid="register-agent-btn" className="cyber-btn bg-avaira-primary text-white px-4 py-2 font-heading text-sm flex items-center gap-2">
                 <UserPlus size={14} /> REGISTER AGENT
               </button>
             </DialogTrigger>
@@ -190,7 +196,7 @@ export default function AgentRegistry() {
                 {renderInput("Collateral (AVAX)", "collateral_amount", "number", "1.0", "0.1")}
                 {renderInput("Mission Intent", "mission_intent", "text", "DeFi yield optimization")}
                 <div className="border-t border-avaira-border pt-3">
-                  <p className="font-heading font-semibold text-xs uppercase tracking-wider text-avaira-cyan mb-2">Risk Envelope</p>
+                  <p className="font-heading font-semibold text-xs uppercase tracking-wider text-avaira-primary mb-2">Risk Envelope</p>
                   <div className="grid grid-cols-2 gap-3">
                     {renderInput("Max TX Value", "max_tx_value", "number", "", "0")}
                     {renderInput("Max Daily TXNs", "max_daily_txns", "number", "", "1")}
@@ -198,7 +204,7 @@ export default function AgentRegistry() {
                     {renderInput("Max Slippage", "max_slippage", "number", "", "0")}
                   </div>
                 </div>
-                <button data-testid="submit-register-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm mt-2">
+                <button data-testid="submit-register-btn" type="submit" className="w-full cyber-btn bg-avaira-primary text-white py-2 font-heading text-sm mt-2">
                   REGISTER & STAKE COLLATERAL
                 </button>
               </form>
@@ -207,7 +213,13 @@ export default function AgentRegistry() {
         </div>
       </div>
 
-      {agents.length === 0 ? (
+      {loading ? (
+        <div className="cyber-card p-12 text-center">
+          <Zap size={40} className="text-avaira-dim mx-auto mb-3 animate-glow-pulse" strokeWidth={1} />
+          <p className="font-heading text-lg text-avaira-muted uppercase">Loading Agents</p>
+          <p className="font-mono text-xs text-avaira-dim mt-1">Pulling registry and score data from the protocol</p>
+        </div>
+      ) : agents.length === 0 ? (
         <div className="cyber-card p-12 text-center">
           <Shield size={40} className="text-avaira-dim mx-auto mb-3" strokeWidth={1} />
           <p className="font-heading text-lg text-avaira-muted uppercase">No Agents Registered</p>

@@ -16,7 +16,6 @@ module.exports = {
                     surface: '#121212',
                     primary: '#E84444',
                     red: '#FF003C',
-                    cyan: '#E84444',
                     purple: '#7000FF',
                     green: '#39FF14',
                     yellow: '#FFD300',

@@ -69,7 +69,7 @@ The Avaira Score is a composite trust rating for each agent:
 | Time on Network | 10% |
 | Deviation Penalty | 10% |
 
-Grades range from **A+ (90–100)** down to **D (<40)**.
+Grades range from **AAA (90–100)** down to **D (0–29)**, with intermediate **AA, A, BBB, BB, B, and CCC** bands used throughout the protocol and UI.
 
 ---
 

@@ -21,7 +21,7 @@ const TimelineStep = ({ step, isLast }) => {
       </div>
       <div className="pb-4 flex-1">
         <div className="flex items-center gap-2">
-          <Icon size={12} strokeWidth={1.5} className={isComplete ? 'text-avaira-cyan' : isFailed ? 'text-avaira-red' : 'text-avaira-muted'} />
+          <Icon size={12} strokeWidth={1.5} className={isComplete ? 'text-avaira-primary' : isFailed ? 'text-avaira-red' : 'text-avaira-muted'} />
           <span className="font-mono text-xs uppercase tracking-wider" style={{ color: isComplete ? '#00F0FF' : isFailed ? '#FF003C' : '#858585' }}>
             {step.step.replace(/_/g, ' ')}
           </span>
@@ -82,19 +82,19 @@ export default function ExecutionFlow() {
   };
 
   return (
-    <div data-testid="execution-flow-page">
+    <div className="animate-slide-in" data-testid="execution-flow-page">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">Execution Flow</h1>
           <p className="font-mono text-xs text-avaira-muted mt-1">{executions.length} EXECUTIONS RECORDED</p>
         </div>
         <div className="flex items-center gap-2">
-          <button data-testid="refresh-executions-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-cyan hover:border-avaira-cyan transition-colors">
+          <button data-testid="refresh-executions-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors">
             <RefreshCw size={14} />
           </button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <button data-testid="new-execution-btn" className="cyber-btn bg-avaira-cyan text-white px-4 py-2 font-heading text-sm flex items-center gap-2">
+              <button data-testid="new-execution-btn" className="cyber-btn bg-avaira-primary text-white px-4 py-2 font-heading text-sm flex items-center gap-2">
                 <Send size={14} /> NEW EXECUTION
               </button>
             </DialogTrigger>
@@ -109,7 +109,7 @@ export default function ExecutionFlow() {
                     data-testid="exec-agent-select"
                     value={form.agent_id}
                     onChange={(e) => setForm(p => ({ ...p, agent_id: e.target.value }))}
-                    className="w-full bg-black border border-white/20 focus:border-avaira-cyan text-white font-mono text-sm p-2 outline-none"
+                    className="w-full bg-black border border-white/20 focus:border-avaira-primary text-white font-mono text-sm p-2 outline-none"
                   >
                     <option value="">Select agent...</option>
                     {agents.filter(a => a.status === 'active').map(a => (
@@ -123,7 +123,7 @@ export default function ExecutionFlow() {
                     data-testid="exec-action-select"
                     value={form.action}
                     onChange={(e) => setForm(p => ({ ...p, action: e.target.value }))}
-                    className="w-full bg-black border border-white/20 focus:border-avaira-cyan text-white font-mono text-sm p-2 outline-none"
+                    className="w-full bg-black border border-white/20 focus:border-avaira-primary text-white font-mono text-sm p-2 outline-none"
                   >
                     {["transfer", "swap", "stake", "unstake", "liquidate", "bridge"].map(a => (
                       <option key={a} value={a}>{a.toUpperCase()}</option>
@@ -138,7 +138,7 @@ export default function ExecutionFlow() {
                     step="0.01"
                     value={form.value}
                     onChange={(e) => setForm(p => ({ ...p, value: e.target.value }))}
-                    className="w-full bg-black border border-white/20 focus:border-avaira-cyan text-white font-mono text-sm p-2 outline-none"
+                    className="w-full bg-black border border-white/20 focus:border-avaira-primary text-white font-mono text-sm p-2 outline-none"
                   />
                 </div>
                 <div>
@@ -149,10 +149,10 @@ export default function ExecutionFlow() {
                     value={form.target_address}
                     onChange={(e) => setForm(p => ({ ...p, target_address: e.target.value }))}
                     placeholder="0x... (auto-generated if empty)"
-                    className="w-full bg-black border border-white/20 focus:border-avaira-cyan text-white font-mono text-sm p-2 outline-none"
+                    className="w-full bg-black border border-white/20 focus:border-avaira-primary text-white font-mono text-sm p-2 outline-none"
                   />
                 </div>
-                <button data-testid="submit-execution-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm">
+                <button data-testid="submit-execution-btn" type="submit" className="w-full cyber-btn bg-avaira-primary text-white py-2 font-heading text-sm">
                   SUBMIT EXECUTION REQUEST
                 </button>
               </form>
@@ -187,7 +187,7 @@ export default function ExecutionFlow() {
                   {executions.map(ex => (
                     <tr key={ex.id} className="cursor-pointer" onClick={() => setSelectedExec(ex)} data-testid={`exec-row-${ex.id}`}>
                       <td className="text-foreground">{ex.agent_name}</td>
-                      <td className="uppercase text-avaira-cyan">{ex.action}</td>
+                      <td className="uppercase text-avaira-primary">{ex.action}</td>
                       <td className="text-right text-foreground">{ex.value.toFixed(4)}</td>
                       <td className="text-right text-avaira-yellow">{ex.fee_deducted.toFixed(6)}</td>
                       <td>
@@ -210,7 +210,7 @@ export default function ExecutionFlow() {
           {selectedExec ? (
             <div data-testid="execution-timeline">
               <div className="mb-3 pb-3 border-b border-avaira-border">
-                <p className="font-mono text-xs text-avaira-cyan">{selectedExec.agent_name}</p>
+                <p className="font-mono text-xs text-avaira-primary">{selectedExec.agent_name}</p>
                 <p className="font-mono text-[10px] text-avaira-muted mt-0.5">ID: {selectedExec.id.slice(0, 8)}...</p>
               </div>
               <div className="relative">
@@ -221,7 +221,7 @@ export default function ExecutionFlow() {
               {selectedExec.permit && (
                 <div className="mt-3 pt-3 border-t border-avaira-border">
                   <p className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest mb-1">EIP-712 Permit</p>
-                  <div className="bg-black p-2 font-mono text-[10px] text-avaira-cyan break-all max-h-32 overflow-y-auto">
+                  <div className="bg-black p-2 font-mono text-[10px] text-avaira-primary break-all max-h-32 overflow-y-auto">
                     <p>SIG: {selectedExec.permit.signature}</p>
                     <p className="text-avaira-muted mt-1">HASH: {selectedExec.permit.typedDataHash}</p>
                   </div>

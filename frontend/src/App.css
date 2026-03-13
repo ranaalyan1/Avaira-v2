@@ -19,7 +19,10 @@
     transition: border-color 0.3s ease;
 }
 .cyber-card:hover {
-    border-color: rgba(0, 240, 255, 0.3);
+    border-color: rgba(232, 68, 68, 0.3);
+}
+.cyber-card:has(.data-table):hover {
+    border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* Glow effect */

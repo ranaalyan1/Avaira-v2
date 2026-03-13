@@ -23,8 +23,10 @@ export default function Treasury() {
   const [stats, setStats] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [revenueStreams, setRevenueStreams] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
       const [statsRes, txRes, revRes] = await Promise.all([
         axios.get(`${API}/treasury/stats`),
@@ -34,7 +36,11 @@ export default function Treasury() {
       setStats(statsRes.data);
       setTransactions(txRes.data);
       setRevenueStreams(revRes.data);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -52,31 +58,39 @@ export default function Treasury() {
   }));
 
   return (
-    <div data-testid="treasury-page">
+    <div className="animate-slide-in" data-testid="treasury-page">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">Treasury</h1>
           <p className="font-mono text-xs text-avaira-muted mt-1">FEE COLLECTION & DISTRIBUTION</p>
         </div>
-        <button data-testid="refresh-treasury-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-cyan hover:border-avaira-cyan transition-colors">
+        <button data-testid="refresh-treasury-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors">
           <RefreshCw size={14} />
         </button>
       </div>
+
+      {loading && !stats ? (
+        <div className="cyber-card p-12 text-center mb-6">
+          <Wallet size={40} className="text-avaira-dim mx-auto mb-3 animate-glow-pulse" strokeWidth={1} />
+          <p className="font-heading text-lg text-avaira-muted uppercase">Loading Treasury</p>
+          <p className="font-mono text-xs text-avaira-dim mt-1">Fetching fee flows, splits, and recent transactions</p>
+        </div>
+      ) : null}
 
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="cyber-card p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Wallet size={14} className="text-avaira-cyan" strokeWidth={1.5} />
+              <Wallet size={14} className="text-avaira-primary" strokeWidth={1.5} />
               <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">Total Fees</span>
             </div>
-            <p className="font-heading font-bold text-xl text-avaira-cyan" data-testid="total-fees-value">{stats.total_fees.toFixed(6)}</p>
+            <p className="font-heading font-bold text-xl text-avaira-primary" data-testid="total-fees-value">{stats.total_fees.toFixed(6)}</p>
             <p className="font-mono text-[10px] text-avaira-dim">AVAX</p>
           </div>
           <div className="cyber-card p-4">
             <div className="flex items-center gap-2 mb-2">
-              <TrendingUp size={14} className="text-avaira-cyan" strokeWidth={1.5} />
+              <TrendingUp size={14} className="text-avaira-primary" strokeWidth={1.5} />
               <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">Trust Pool</span>
             </div>
             <p className="font-heading font-bold text-xl text-avaira-green" data-testid="trust-pool-value">{stats.total_trust_pool.toFixed(6)}</p>
@@ -121,9 +135,9 @@ export default function Treasury() {
               );
             })}
           </div>
-          <div className="mt-3 p-3 border border-avaira-cyan/20 bg-avaira-cyan/5">
+          <div className="mt-3 p-3 border border-avaira-primary/20 bg-avaira-primary/5">
             <span className="font-mono text-xs text-avaira-muted">TOTAL PROTOCOL REVENUE: </span>
-            <span className="font-heading font-bold text-lg text-avaira-cyan">{revenueStreams.total_revenue.toFixed(6)} AVAX</span>
+            <span className="font-heading font-bold text-lg text-avaira-primary">{revenueStreams.total_revenue.toFixed(6)} AVAX</span>
           </div>
         </div>
       )}
@@ -194,7 +208,7 @@ export default function Treasury() {
                     <span className="text-avaira-dim">{new Date(tx.timestamp).toLocaleTimeString()}</span>
                   </div>
                   <div className="flex gap-4 mt-0.5 font-mono text-[10px]">
-                    <span className="text-avaira-cyan">TP: {tx.trust_pool_share.toFixed(6)}</span>
+                    <span className="text-avaira-primary">TP: {tx.trust_pool_share.toFixed(6)}</span>
                     <span className="text-avaira-purple">REV: {tx.protocol_revenue_share.toFixed(6)}</span>
                   </div>
                 </div>

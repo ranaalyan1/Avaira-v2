@@ -102,14 +102,14 @@ export default function Underwriters() {
   const totalEarnings = underwriters.reduce((s, u) => s + u.total_earnings, 0);
 
   return (
-    <div data-testid="underwriters-page">
+    <div className="animate-slide-in" data-testid="underwriters-page">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">Underwriter Marketplace</h1>
           <p className="font-mono text-xs text-avaira-muted mt-1">{underwriters.length} UNDERWRITERS / {missions.length} MISSIONS</p>
         </div>
         <div className="flex items-center gap-2">
-          <button data-testid="refresh-uw-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-cyan hover:border-avaira-cyan transition-colors">
+          <button data-testid="refresh-uw-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors">
             <RefreshCw size={14} />
           </button>
           <Dialog open={missionOpen} onOpenChange={setMissionOpen}>
@@ -156,7 +156,7 @@ export default function Underwriters() {
           </Dialog>
           <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
             <DialogTrigger asChild>
-              <button data-testid="register-uw-btn" className="cyber-btn bg-avaira-cyan text-white px-3 py-2 font-heading text-xs flex items-center gap-1.5">
+              <button data-testid="register-uw-btn" className="cyber-btn bg-avaira-primary text-white px-3 py-2 font-heading text-xs flex items-center gap-1.5">
                 <Plus size={12} /> REGISTER UNDERWRITER
               </button>
             </DialogTrigger>
@@ -171,7 +171,7 @@ export default function Underwriters() {
                   <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Capital (AVAX)</label>
                   <input data-testid="uw-capital-input" type="number" step="0.1" min="0.5" value={uwForm.capital_amount} onChange={e => setUwForm(p => ({ ...p, capital_amount: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
                 </div>
-                <button data-testid="submit-uw-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm">REGISTER & DEPOSIT</button>
+                <button data-testid="submit-uw-btn" type="submit" className="w-full cyber-btn bg-avaira-primary text-white py-2 font-heading text-sm">REGISTER & DEPOSIT</button>
               </form>
             </DialogContent>
           </Dialog>
@@ -186,7 +186,7 @@ export default function Underwriters() {
         </div>
         <div className="cyber-card p-4">
           <p className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">Capital Staked</p>
-          <p className="font-heading font-bold text-xl text-avaira-cyan">{totalStaked.toFixed(2)} AVAX</p>
+          <p className="font-heading font-bold text-xl text-avaira-primary">{totalStaked.toFixed(2)} AVAX</p>
         </div>
         <div className="cyber-card p-4">
           <p className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">Total Earnings</p>
@@ -202,7 +202,7 @@ export default function Underwriters() {
         {/* Mission Marketplace */}
         <div className="lg:col-span-2 space-y-4">
           <div className="cyber-card p-4">
-            <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-cyan mb-3 flex items-center gap-2">
+            <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-primary mb-3 flex items-center gap-2">
               <Zap size={14} /> Open Missions
             </h2>
             {openMissions.length === 0 ? (
@@ -210,7 +210,7 @@ export default function Underwriters() {
             ) : (
               <div className="space-y-2">
                 {openMissions.map(m => (
-                  <div key={m.id} className="p-3 border border-avaira-border hover:border-avaira-cyan/30 transition-colors" data-testid={`mission-${m.id}`}>
+                  <div key={m.id} className="p-3 border border-avaira-border hover:border-avaira-primary/30 transition-colors" data-testid={`mission-${m.id}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div>
                         <span className="font-heading font-bold text-sm text-foreground uppercase">{m.agent_name}</span>
@@ -221,7 +221,7 @@ export default function Underwriters() {
                     <p className="font-mono text-xs text-avaira-muted">{m.description}</p>
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-avaira-border">
                       <div className="flex gap-4 font-mono text-[10px]">
-                        <span className="text-avaira-cyan">VALUE: {m.target_value} AVAX</span>
+                        <span className="text-avaira-primary">VALUE: {m.target_value} AVAX</span>
                         <span className="text-avaira-green">STAKED: {m.total_staked.toFixed(2)} AVAX</span>
                         <span className="text-avaira-muted">UW: {m.underwriters.length}</span>
                       </div>
@@ -229,7 +229,7 @@ export default function Underwriters() {
                         <button
                           data-testid={`stake-mission-${m.id}`}
                           onClick={() => { setSelectedMission(m); setStakeOpen(true); }}
-                          className="font-mono text-[10px] px-2 py-1 border border-avaira-cyan/50 text-avaira-cyan hover:bg-avaira-cyan/10 transition-colors"
+                          className="font-mono text-[10px] px-2 py-1 border border-avaira-primary/50 text-avaira-primary hover:bg-avaira-primary/10 transition-colors"
                         >STAKE</button>
                         <button
                           data-testid={`settle-success-${m.id}`}
@@ -264,7 +264,7 @@ export default function Underwriters() {
                     <tr key={m.id}>
                       <td className="text-foreground">{m.agent_name}</td>
                       <td className="text-avaira-muted truncate max-w-[150px]">{m.description}</td>
-                      <td className="text-right text-avaira-cyan">{m.target_value}</td>
+                      <td className="text-right text-avaira-primary">{m.target_value}</td>
                       <td><span className={`font-mono text-[10px] px-1.5 py-0.5 border ${m.result === 'success' ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400'}`}>{m.result?.toUpperCase()}</span></td>
                       <td className="text-avaira-dim">{m.settled_at ? new Date(m.settled_at).toLocaleTimeString() : '-'}</td>
                     </tr>
@@ -278,7 +278,7 @@ export default function Underwriters() {
         {/* Underwriter List */}
         <div className="cyber-card p-4">
           <h2 className="font-heading font-semibold text-sm uppercase tracking-wider text-avaira-muted mb-3 flex items-center gap-2">
-            <Users size={14} className="text-avaira-cyan" /> Underwriters
+            <Users size={14} className="text-avaira-primary" /> Underwriters
           </h2>
           {underwriters.length === 0 ? (
             <p className="font-mono text-xs text-avaira-dim text-center py-6">NO UNDERWRITERS</p>
@@ -291,7 +291,7 @@ export default function Underwriters() {
                     <span className="font-mono text-[10px] text-avaira-green">{uw.total_earnings.toFixed(4)} earned</span>
                   </div>
                   <div className="space-y-0.5 font-mono text-[10px]">
-                    <div className="flex justify-between"><span className="text-avaira-muted">AVAILABLE</span><span className="text-avaira-cyan">{uw.capital_available.toFixed(2)} AVAX</span></div>
+                    <div className="flex justify-between"><span className="text-avaira-muted">AVAILABLE</span><span className="text-avaira-primary">{uw.capital_available.toFixed(2)} AVAX</span></div>
                     <div className="flex justify-between"><span className="text-avaira-muted">STAKED</span><span className="text-avaira-yellow">{uw.capital_staked.toFixed(2)} AVAX</span></div>
                     <div className="flex justify-between"><span className="text-avaira-muted">MISSIONS</span><span className="text-foreground">{uw.missions_successful}/{uw.missions_underwritten}</span></div>
                   </div>
@@ -320,7 +320,7 @@ export default function Underwriters() {
                 <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Amount (AVAX)</label>
                 <input data-testid="stake-amount-input" type="number" step="0.1" min="0.1" value={stakeForm.amount} onChange={e => setStakeForm(p => ({ ...p, amount: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
               </div>
-              <button data-testid="submit-stake-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm">STAKE CAPITAL</button>
+              <button data-testid="submit-stake-btn" type="submit" className="w-full cyber-btn bg-avaira-primary text-white py-2 font-heading text-sm">STAKE CAPITAL</button>
             </form>
           )}
         </DialogContent>

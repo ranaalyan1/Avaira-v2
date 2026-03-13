@@ -15,7 +15,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-avaira-bg flex items-center justify-center px-6" data-testid="login-page">
+    <div className="min-h-screen bg-avaira-bg flex items-center justify-center px-6 animate-slide-in" data-testid="login-page">
       {/* Grid bg */}
       <div className="fixed inset-0 -z-10" style={{ backgroundImage: 'linear-gradient(rgba(232,68,68,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(232,68,68,0.02) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
 
@@ -52,7 +52,7 @@ export default function Login() {
           <button
             data-testid="x-login-btn"
             onClick={handleXLogin}
-            className="w-full flex items-center justify-center gap-3 p-3 bg-black border border-avaira-border text-foreground font-heading font-semibold text-sm uppercase tracking-wider hover:border-avaira-cyan transition-colors"
+            className="w-full flex items-center justify-center gap-3 p-3 bg-black border border-avaira-border text-foreground font-heading font-semibold text-sm uppercase tracking-wider hover:border-avaira-primary transition-colors"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
