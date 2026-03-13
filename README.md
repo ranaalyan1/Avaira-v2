@@ -197,6 +197,7 @@ ENABLE_HEALTH_CHECK=false
 - Collateral withdrawal requires a cooldown period
 - Privileged protocol routes are admin-gated via `ADMIN_EMAILS`
 - Sensitive signing material is loaded from environment (`PERMIT_SECRET`) and should never be committed
+- The simulation lifecycle endpoint is admin-gated to prevent public abuse/data spam
 
 ---
 

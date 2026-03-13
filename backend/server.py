@@ -311,7 +311,7 @@ async def register_agent(body: AgentCreate):
     return agent
 
 @api_router.get("/agents")
-async def list_agents(status: Optional[str] = None, limit: int = 100):
+async def list_agents(status: Optional[str] = None, limit: int = Query(100, ge=1, le=500)):
     query = {}
     if status:
         query["status"] = status
@@ -474,7 +474,7 @@ async def create_execution_request(body: ExecutionRequestCreate):
     return execution
 
 @api_router.get("/executions")
-async def list_executions(agent_id: Optional[str] = None, status: Optional[str] = None, limit: int = 100):
+async def list_executions(agent_id: Optional[str] = None, status: Optional[str] = None, limit: int = Query(100, ge=1, le=500)):
     query = {}
     if agent_id:
         query["agent_id"] = agent_id
@@ -543,7 +543,7 @@ async def slash_agent(agent_id: str, body: SlashRequest, _admin: Dict[str, Any] 
     return {**event, "collateral_remaining": new_collateral}
 
 @api_router.get("/freeze/events")
-async def list_freeze_events(agent_id: Optional[str] = None, limit: int = 100):
+async def list_freeze_events(agent_id: Optional[str] = None, limit: int = Query(100, ge=1, le=500)):
     query = {}
     if agent_id:
         query["agent_id"] = agent_id
@@ -575,23 +575,23 @@ async def get_treasury_stats():
     return {"total_fees": 0, "total_trust_pool": 0, "total_protocol_revenue": 0, "transaction_count": 0}
 
 @api_router.get("/treasury/transactions")
-async def list_treasury_transactions(limit: int = 100):
+async def list_treasury_transactions(limit: int = Query(100, ge=1, le=500)):
     txs = await db.treasury_transactions.find({}, {"_id": 0}).sort("timestamp", -1).to_list(limit)
     return txs
 
 # ─── REPUTATION ENDPOINTS ───────────────────────────────────────
 @api_router.get("/reputation/leaderboard")
-async def get_leaderboard(limit: int = 20):
+async def get_leaderboard(limit: int = Query(20, ge=1, le=200)):
     agents = await db.agents.find({}, {"_id": 0}).sort("reputation", -1).to_list(limit)
     return agents
 
 @api_router.get("/reputation/{agent_id}/history")
-async def get_reputation_history(agent_id: str, limit: int = 50):
+async def get_reputation_history(agent_id: str, limit: int = Query(50, ge=1, le=500)):
     history = await db.reputation_history.find({"agent_id": agent_id}, {"_id": 0}).sort("timestamp", -1).to_list(limit)
     return history
 
 @api_router.get("/reputation/history")
-async def get_all_reputation_history(limit: int = 100):
+async def get_all_reputation_history(limit: int = Query(100, ge=1, le=500)):
     history = await db.reputation_history.find({}, {"_id": 0}).sort("timestamp", -1).to_list(limit)
     return history
 
@@ -626,7 +626,7 @@ async def get_dashboard_stats():
     }
 
 @api_router.get("/dashboard/activity")
-async def get_recent_activity(limit: int = 20):
+async def get_recent_activity(limit: int = Query(20, ge=1, le=100)):
     activities = []
     recent_execs = await db.executions.find({}, {"_id": 0}).sort("created_at", -1).to_list(10)
     for ex in recent_execs:
@@ -818,7 +818,7 @@ async def get_contract_architecture():
 
 # ─── SIMULATION ENDPOINT ────────────────────────────────────────
 @api_router.post("/simulate/lifecycle")
-async def simulate_full_lifecycle():
+async def simulate_full_lifecycle(_admin: Dict[str, Any] = Depends(require_admin_user)):
     """Simulates the complete AVAIRA execution lifecycle end-to-end."""
     steps = []
 
@@ -943,7 +943,7 @@ async def register_underwriter(body: UnderwriterCreate):
     return uw
 
 @api_router.get("/underwriters")
-async def list_underwriters(limit: int = 100):
+async def list_underwriters(limit: int = Query(100, ge=1, le=500)):
     uws = await db.underwriters.find({}, {"_id": 0}).sort("total_earnings", -1).to_list(limit)
     return uws
 
@@ -986,7 +986,7 @@ async def create_mission(body: MissionCreate):
     return mission
 
 @api_router.get("/missions")
-async def list_missions(status: Optional[str] = None, limit: int = 100):
+async def list_missions(status: Optional[str] = None, limit: int = Query(100, ge=1, le=500)):
     query = {}
     if status:
         query["status"] = status
