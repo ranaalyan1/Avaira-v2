@@ -176,6 +176,8 @@ ADMIN_EMAILS=admin@example.com
 CORS_ORIGINS=http://localhost:3000
 ```
 
+`ADMIN_EMAILS` controls who can access privileged protocol actions (freeze, slash, status updates, mission settlement). If it is not set, those admin operations are blocked by design.
+
 Frontend `.env`:
 
 ```

@@ -214,6 +214,10 @@ async def create_auth_session(body: SessionRequest):
     name = user_data.get("name", "")
     picture = user_data.get("picture", "")
     session_token = user_data.get("session_token", "")
+    if not email:
+        raise HTTPException(401, "Invalid auth response: missing email")
+    if not session_token:
+        raise HTTPException(401, "Invalid auth response: missing session token")
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
         user_id = existing["user_id"]
@@ -263,6 +267,9 @@ async def get_current_user(request: Request):
 
 
 async def require_admin_user(request: Request) -> Dict[str, Any]:
+    if not ADMIN_EMAILS:
+        logger.error("ADMIN_EMAILS is not configured; refusing admin actions")
+        raise HTTPException(503, "Server admin configuration missing")
     user = await get_current_user(request)
     email = (user.get("email") or "").lower()
     if email not in ADMIN_EMAILS:
