@@ -1,17 +1,263 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#050505" />
-        <meta name="description" content="AVAIRA - Decentralized AI Execution Control Protocol" />
+
+        <!-- SEO Meta -->
+        <title>AVAIRA Protocol — The Trust Infrastructure for the Autonomous Economy</title>
+        <meta name="description" content="AVAIRA is the Moody's + DTCC + Lloyd's of London for the AI Agent Economy. We rate, clear, and insure every AI agent transaction on-chain — so machines can manage billions and humans can sleep at night. Built as an Avalanche L1." />
+        <meta name="keywords" content="AVAIRA, AI agent, blockchain, execution control, risk management, Avalanche, DeFi, smart contracts, underwriting, agent scoring, EIP-712, decentralized AI" />
+        <meta name="author" content="AVAIRA Protocol" />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://avaira.xyz/" />
+
+        <!-- Open Graph -->
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://avaira.xyz/" />
+        <meta property="og:title" content="AVAIRA Protocol — The Trust Infrastructure for the Autonomous Economy" />
+        <meta property="og:description" content="We rate, clear, and insure every AI agent transaction on-chain. The Moody's + DTCC + Lloyd's of London for the AI Agent Economy. Built on Avalanche." />
+        <meta property="og:image" content="https://avaira.xyz/logo.png" />
+        <meta property="og:site_name" content="AVAIRA Protocol" />
+
+        <!-- Twitter / X Card -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="AVAIRA Protocol — Trust Infrastructure for the Autonomous Economy" />
+        <meta name="twitter:description" content="We rate, clear, and insure every AI agent transaction on-chain. The Moody's + DTCC + Lloyd's for AI Agents." />
+        <meta name="twitter:image" content="https://avaira.xyz/logo.png" />
+
+        <!-- Structured Data (JSON-LD) -->
+        <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            "name": "AVAIRA Protocol",
+            "description": "The trust infrastructure for the autonomous economy. Rates, clears, and insures every AI agent transaction on-chain.",
+            "url": "https://avaira.xyz",
+            "applicationCategory": "Blockchain",
+            "operatingSystem": "Web",
+            "offers": {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "USD"
+            }
+        }
+        </script>
+
+        <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-        <title>AVAIRA Protocol</title>
+
+        <!-- Critical inline CSS for static content (before React loads) -->
+        <style>
+            .avaira-static{font-family:'Inter',sans-serif;background:#050505;color:#EDEDED;margin:0;padding:0;line-height:1.6}
+            .avaira-static *{box-sizing:border-box}
+            .avaira-static-nav{position:sticky;top:0;background:rgba(5,5,5,0.9);backdrop-filter:blur(12px);border-bottom:1px solid #333;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;z-index:50}
+            .avaira-static-logo{display:flex;align-items:center;gap:8px}
+            .avaira-static-logo img{width:28px;height:28px}
+            .avaira-static-logo span{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:#E84444;text-transform:uppercase;letter-spacing:0.02em}
+            .avaira-static-hero{max-width:960px;margin:0 auto;padding:80px 24px 48px}
+            .avaira-static-badge{font-family:'JetBrains Mono',monospace;font-size:10px;color:#E84444;letter-spacing:0.3em;border:1px solid rgba(232,68,68,0.3);padding:4px 12px;background:rgba(232,68,68,0.05);display:inline-block;margin-bottom:16px}
+            .avaira-static h1{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:clamp(32px,5vw,56px);text-transform:uppercase;letter-spacing:-0.01em;line-height:1.1;margin:0 0 20px;color:#EDEDED}
+            .avaira-static h1 em{font-style:normal;color:#E84444}
+            .avaira-static h2{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:clamp(20px,3vw,28px);text-transform:uppercase;letter-spacing:0.02em;margin:0 0 12px;color:#EDEDED}
+            .avaira-static-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:#E84444;letter-spacing:0.3em;margin-bottom:8px}
+            .avaira-static-sub{font-size:16px;color:#A8A8A8;max-width:580px;line-height:1.7;margin:0 0 32px}
+            .avaira-static-stats{display:flex;gap:40px;margin-top:48px}
+            .avaira-static-stats dt{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;color:#E84444}
+            .avaira-static-stats dd{font-family:'JetBrains Mono',monospace;font-size:10px;color:#707070;text-transform:uppercase;letter-spacing:0.1em;margin:4px 0 0}
+            .avaira-static-section{max-width:1120px;margin:0 auto;padding:64px 24px;border-top:1px solid #222}
+            .avaira-static-grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+            .avaira-static-card{background:#0A0A0A;border:1px solid rgba(255,255,255,0.08);padding:24px}
+            .avaira-static-card h3{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;text-transform:uppercase;margin:12px 0 4px}
+            .avaira-static-card .tag{font-family:'JetBrains Mono',monospace;font-size:10px;color:#707070;text-transform:uppercase;letter-spacing:0.15em}
+            .avaira-static-card p{font-size:14px;color:#A8A8A8;margin:8px 0 0;line-height:1.6}
+            .avaira-static-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+            .avaira-static-step{border:1px solid #333;padding:12px;background:#050505}
+            .avaira-static-step .num{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:28px;color:rgba(232,68,68,0.2)}
+            .avaira-static-step .lbl{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;color:#EDEDED}
+            .avaira-static-step .desc{font-family:'JetBrains Mono',monospace;font-size:10px;color:#707070;margin-top:2px}
+            .avaira-static-moats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+            .avaira-static-moat{border:1px solid #333;padding:16px;background:#0A0A0A}
+            .avaira-static-moat h3{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;text-transform:uppercase;color:#EDEDED;margin:0 0 8px}
+            .avaira-static-moat p{font-family:'JetBrains Mono',monospace;font-size:10px;color:#A8A8A8;margin:0;line-height:1.7}
+            .avaira-static-table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:13px}
+            .avaira-static-table th{text-align:left;padding:8px 12px;color:#A8A8A8;border-bottom:1px solid #333;text-transform:uppercase;font-size:11px;letter-spacing:0.05em;font-weight:500}
+            .avaira-static-table td{padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.04);color:#EDEDED}
+            .avaira-static-table .right{text-align:right}
+            .avaira-static-code{background:#000;border:1px solid #333;padding:20px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#39FF14;white-space:pre;overflow-x:auto;line-height:1.8}
+            .avaira-static-cta{text-align:center;max-width:720px;margin:0 auto;padding:64px 24px}
+            .avaira-static-cta h2 em{font-style:normal;color:#E84444}
+            .avaira-static-btn{display:inline-block;background:#E84444;color:#fff;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.1em;padding:12px 32px;text-decoration:none;margin-top:24px}
+            .avaira-static-footer{border-top:1px solid #222;padding:24px;display:flex;align-items:center;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:#707070}
+            .avaira-static-alert{border:1px solid rgba(232,68,68,0.3);background:rgba(232,68,68,0.05);padding:16px;margin-top:20px}
+            .avaira-static-alert strong{font-family:'Rajdhani',sans-serif;font-size:14px;text-transform:uppercase;color:#E84444}
+            .avaira-static-alert p{font-family:'JetBrains Mono',monospace;font-size:12px;color:#A8A8A8;margin:4px 0 0}
+        </style>
     </head>
     <body>
-        <noscript>You need to enable JavaScript to run this app.</noscript>
-        <div id="root"></div>
+        <div id="root">
+            <!--
+                STATIC PRE-RENDERED CONTENT FOR SEO / CRAWLERS
+                React hydrates over this on client-side load.
+                All key content is readable without JavaScript.
+            -->
+            <div class="avaira-static">
+
+                <!-- Navigation -->
+                <nav class="avaira-static-nav" aria-label="Main navigation">
+                    <div class="avaira-static-logo">
+                        <img src="/logo.png" alt="AVAIRA Protocol logo" width="28" height="28" />
+                        <span>AVAIRA</span>
+                    </div>
+                    <a href="/login" class="avaira-static-btn" style="padding:8px 20px;font-size:12px">Launch Protocol</a>
+                </nav>
+
+                <!-- Hero -->
+                <header class="avaira-static-hero">
+                    <div class="avaira-static-badge">AVALANCHE L1 // EXECUTION CONTROL PROTOCOL</div>
+                    <h1>The Trust Infrastructure for the <em>Autonomous Economy</em></h1>
+                    <p class="avaira-static-sub">
+                        We rate, clear, and insure every AI agent transaction on-chain &mdash;
+                        so machines can manage billions and humans can sleep at night.
+                    </p>
+                    <a href="/dashboard" class="avaira-static-btn">Launch AVAIRA Protocol &rarr;</a>
+                    <dl class="avaira-static-stats">
+                        <div><dt>&lt;200ms</dt><dd>Finality</dd></div>
+                        <div><dt>0.5%</dt><dd>Protocol Fee</dd></div>
+                        <div><dt>AAA–D</dt><dd>Agent Scoring</dd></div>
+                    </dl>
+                </header>
+
+                <!-- Three Pillars -->
+                <section class="avaira-static-section" aria-labelledby="pillars-heading">
+                    <div class="avaira-static-label">THE PROTOCOL</div>
+                    <h2 id="pillars-heading">Three Functions. One Protocol.</h2>
+                    <div class="avaira-static-grid3">
+                        <article class="avaira-static-card">
+                            <h3 style="color:#E84444">RATE</h3>
+                            <div class="tag">The Moody's Function &middot; $50B+ market</div>
+                            <p>Every AI agent gets an Avaira Score (AAA to D). No enterprise will trust an unrated agent. The rating becomes the standard.</p>
+                        </article>
+                        <article class="avaira-static-card">
+                            <h3 style="color:#39FF14">CLEAR</h3>
+                            <div class="tag">The DTCC Function &middot; $2.5Q processed/yr</div>
+                            <p>Every agent transaction passes through our settlement layer. We see every execution. Unmatched data. Unmatched risk models.</p>
+                        </article>
+                        <article class="avaira-static-card">
+                            <h3 style="color:#7000FF">INSURE</h3>
+                            <div class="tag">The Lloyd's Function &middot; $100B+ in premiums</div>
+                            <p>Human underwriters stake capital against agent missions. Agent fails &rarr; collateral covers losses. Agent succeeds &rarr; underwriters earn yield.</p>
+                        </article>
+                    </div>
+                </section>
+
+                <!-- How It Works -->
+                <section class="avaira-static-section" style="background:#0A0A0A" aria-labelledby="flow-heading">
+                    <div class="avaira-static-label">EXECUTION FLOW</div>
+                    <h2 id="flow-heading">How Every Transaction is Secured</h2>
+                    <div class="avaira-static-steps">
+                        <div class="avaira-static-step"><div class="num">01</div><div class="lbl">Register</div><div class="desc">Agent stakes collateral</div></div>
+                        <div class="avaira-static-step"><div class="num">02</div><div class="lbl">Declare</div><div class="desc">Submit mission intent</div></div>
+                        <div class="avaira-static-step"><div class="num">03</div><div class="lbl">Validate</div><div class="desc">Risk envelope check</div></div>
+                        <div class="avaira-static-step"><div class="num">04</div><div class="lbl">Permit</div><div class="desc">EIP-712 signed</div></div>
+                        <div class="avaira-static-step"><div class="num">05</div><div class="lbl">Execute</div><div class="desc">On-chain settlement</div></div>
+                        <div class="avaira-static-step"><div class="num">06</div><div class="lbl">Settle</div><div class="desc">Fees split 85/10/5</div></div>
+                    </div>
+                    <div class="avaira-static-alert">
+                        <strong>Deviation Detected?</strong>
+                        <p>Agent instantly frozen. Collateral slashed. Insurance pool compensates backers. All within &lt;200ms.</p>
+                    </div>
+                </section>
+
+                <!-- Five Moats -->
+                <section class="avaira-static-section" aria-labelledby="moats-heading">
+                    <div class="avaira-static-label">DEFENSIBILITY</div>
+                    <h2 id="moats-heading">Five Moats. Unkillable.</h2>
+                    <div class="avaira-static-moats">
+                        <div class="avaira-static-moat"><h3>Data Flywheel</h3><p>More agents &rarr; better risk models &rarr; more accurate scores &rarr; more enterprises &rarr; more agents. Gap widens over time.</p></div>
+                        <div class="avaira-static-moat"><h3>Regulatory Capture</h3><p>Define the standard before regulators do. Regulation doesn't kill you. Regulation IS you.</p></div>
+                        <div class="avaira-static-moat"><h3>Three-Sided Network</h3><p>Agents + Underwriters + Enterprises. Three-sided network effects are nearly impossible to replicate.</p></div>
+                        <div class="avaira-static-moat"><h3>Switching Costs</h3><p>Behavioral history, Avaira Score, insurance coverage, enterprise contracts. 6+ month switching cost. Nobody switches.</p></div>
+                        <div class="avaira-static-moat"><h3>Avalanche L1</h3><p>Sub-200ms finality. Sovereign rules. Custom gas economics. The speed required to be a real-time circuit breaker.</p></div>
+                    </div>
+                </section>
+
+                <!-- Revenue Architecture -->
+                <section class="avaira-static-section" style="background:#0A0A0A" aria-labelledby="revenue-heading">
+                    <div class="avaira-static-label">REVENUE ARCHITECTURE</div>
+                    <h2 id="revenue-heading">Four Revenue Streams From Day 1</h2>
+                    <table class="avaira-static-table">
+                        <thead>
+                            <tr><th>Stream</th><th>Description</th><th class="right">Year 1</th><th class="right">Year 5</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Agent Registration</td><td style="color:#A8A8A8">SaaS tiers: Free / Growth ($200/mo) / Enterprise ($2,000/mo)</td><td class="right" style="color:#FFD300">$1.2M</td><td class="right" style="color:#39FF14">$240M</td></tr>
+                            <tr><td>Underwriting Spread</td><td style="color:#A8A8A8">5% protocol fee on every settled mission</td><td class="right" style="color:#FFD300">$2M</td><td class="right" style="color:#39FF14">$400M</td></tr>
+                            <tr><td>Slashing Revenue</td><td style="color:#A8A8A8">20% of all slashed collateral &mdash; pure insurance profit</td><td class="right" style="color:#FFD300">$500K</td><td class="right" style="color:#39FF14">$50M</td></tr>
+                            <tr><td>Data &amp; Analytics</td><td style="color:#A8A8A8">Bloomberg Terminal for AI agents. $0.01/query API access</td><td class="right" style="color:#FFD300">$300K</td><td class="right" style="color:#39FF14">$80M</td></tr>
+                            <tr style="border-top:2px solid rgba(232,68,68,0.3)"><td style="color:#E84444;font-weight:700">Total</td><td></td><td class="right" style="color:#E84444;font-weight:700">$4M</td><td class="right" style="color:#E84444;font-weight:700">$770M</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <!-- SDK -->
+                <section class="avaira-static-section" aria-labelledby="sdk-heading">
+                    <div class="avaira-static-label">DEVELOPER EXPERIENCE</div>
+                    <h2 id="sdk-heading">4 Function Calls. That's It.</h2>
+                    <p class="avaira-static-sub">If integration takes more than 10 minutes, the product has failed.</p>
+                    <pre class="avaira-static-code">import { AvairaSDK } from '@avaira/sdk';
+
+const avaira = new AvairaSDK({
+  apiKey: 'your-api-key',
+  network: 'fuji',
+  chainId: 43113
+});
+
+// 1. Register agent
+const agent = await avaira.register(wallet, config);
+
+// 2. Declare intent
+const mission = await avaira.declareIntent(plan);
+
+// 3. Execute (AVAIRA monitors automatically)
+const result = await avaira.execute(action);
+
+// 4. Settle
+const settlement = await avaira.settle(mission.id);</pre>
+                </section>
+
+                <!-- CTA -->
+                <section class="avaira-static-cta">
+                    <h2>Build It. Own the Position. <em>Never Let Go.</em></h2>
+                    <p style="color:#A8A8A8;font-size:15px;max-width:480px;margin:12px auto 0">
+                        The reason this becomes a billion-dollar company is not because
+                        the technology is revolutionary. It's because the position is irreplaceable.
+                    </p>
+                    <a href="/dashboard" class="avaira-static-btn">Launch AVAIRA Protocol &rarr;</a>
+                </section>
+
+                <!-- Footer -->
+                <footer class="avaira-static-footer">
+                    <div class="avaira-static-logo">
+                        <img src="/logo.png" alt="AVAIRA" width="16" height="16" />
+                        <span style="font-size:14px">AVAIRA</span>
+                        <span style="font-size:9px;color:#707070;margin-left:8px">AVALANCHE L1</span>
+                    </div>
+                    <span>EXECUTION CONTROL PROTOCOL v1.0</span>
+                </footer>
+
+            </div>
+            <!-- END STATIC PRE-RENDERED CONTENT -->
+        </div>
+
+        <noscript>
+            <p style="text-align:center;padding:40px;font-family:sans-serif;color:#A8A8A8;background:#050505">
+                AVAIRA Protocol requires JavaScript for the interactive dashboard.
+                The content above provides a full overview of the protocol.
+            </p>
+        </noscript>
     </body>
 </html>

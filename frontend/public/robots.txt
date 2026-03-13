@@ -1,0 +1,14 @@
+# AVAIRA Protocol - https://avaira.xyz
+# Execution Control Protocol for AI Agents
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://avaira.xyz/sitemap.xml
+
+# Crawl-delay (optional, polite)
+Crawl-delay: 1
+
+# Disallow internal API paths
+Disallow: /api/
