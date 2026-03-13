@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Request, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
@@ -36,7 +36,6 @@ REP_FAILURE_PENALTY = 5
 REP_FREEZE_PENALTY = 20
 REP_SLASH_PENALTY = 10
 SLASH_RATE = 0.5  # 50% of collateral
-PERMIT_SECRET = secrets.token_hex(32)
 AVAIRA_GRADES = [('AAA', 90, 100), ('AA', 80, 89), ('A', 70, 79), ('BBB', 60, 69), ('BB', 50, 59), ('B', 40, 49), ('CCC', 30, 39), ('D', 0, 29)]
 MISSION_FEE_AGENT = 0.85
 MISSION_FEE_UNDERWRITER = 0.10
@@ -49,6 +48,17 @@ SUBSCRIPTION_TIERS = {
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+
+def _get_required_env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
+PERMIT_SECRET = _get_required_env("PERMIT_SECRET")
+ADMIN_EMAILS = {email.strip().lower() for email in os.environ.get("ADMIN_EMAILS", "").split(",") if email.strip()}
 
 # ─── PYDANTIC MODELS ────────────────────────────────────────────
 class RiskEnvelope(BaseModel):
@@ -251,6 +261,14 @@ async def get_current_user(request: Request):
         raise HTTPException(401, "User not found")
     return user
 
+
+async def require_admin_user(request: Request) -> Dict[str, Any]:
+    user = await get_current_user(request)
+    email = (user.get("email") or "").lower()
+    if email not in ADMIN_EMAILS:
+        raise HTTPException(403, "Admin privileges required")
+    return user
+
 @api_router.post("/auth/logout")
 async def logout(request: Request):
     token = request.cookies.get("session_token")
@@ -301,7 +319,7 @@ async def get_agent(agent_id: str):
     return agent
 
 @api_router.patch("/agents/{agent_id}/status")
-async def update_agent_status(agent_id: str, status: str = Query(...)):
+async def update_agent_status(agent_id: str, status: str = Query(...), _admin: Dict[str, Any] = Depends(require_admin_user)):
     if status not in ["active", "paused", "frozen"]:
         raise HTTPException(400, "Invalid status")
     result = await db.agents.update_one({"id": agent_id}, {"$set": {"status": status}})
@@ -467,7 +485,7 @@ async def get_execution(execution_id: str):
 
 # ─── FREEZE / SLASH ENDPOINTS ───────────────────────────────────
 @api_router.post("/freeze/{agent_id}")
-async def freeze_agent(agent_id: str, body: FreezeRequest):
+async def freeze_agent(agent_id: str, body: FreezeRequest, _admin: Dict[str, Any] = Depends(require_admin_user)):
     agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
     if not agent:
         raise HTTPException(404, "Agent not found")
@@ -490,7 +508,7 @@ async def freeze_agent(agent_id: str, body: FreezeRequest):
     return event
 
 @api_router.post("/slash/{agent_id}")
-async def slash_agent(agent_id: str, body: SlashRequest):
+async def slash_agent(agent_id: str, body: SlashRequest, _admin: Dict[str, Any] = Depends(require_admin_user)):
     agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
     if not agent:
         raise HTTPException(404, "Agent not found")
@@ -994,7 +1012,7 @@ async def stake_on_mission(mission_id: str, body: MissionStake):
     return updated
 
 @api_router.post("/missions/{mission_id}/settle")
-async def settle_mission(mission_id: str, success: bool = True):
+async def settle_mission(mission_id: str, success: bool = True, _admin: Dict[str, Any] = Depends(require_admin_user)):
     mission = await db.missions.find_one({"id": mission_id}, {"_id": 0})
     if not mission:
         raise HTTPException(404, "Mission not found")
@@ -1076,10 +1094,15 @@ async def root():
 
 app.include_router(api_router)
 
+cors_origins = [origin.strip() for origin in os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',') if origin.strip()]
+allow_credentials = '*' not in cors_origins
+if not allow_credentials:
+    logger.warning("CORS_ORIGINS includes '*'; credentialed cross-origin requests are disabled.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_credentials=allow_credentials,
+    allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

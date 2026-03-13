@@ -160,11 +160,28 @@ yarn start
 
 ### Environment Variables
 
-Create a `.env` file in `/backend`:
+Create `.env` files from templates:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+Backend `.env`:
 
 ```
 MONGO_URL=mongodb+srv://<user>:<password>@cluster.mongodb.net/avaira
 PERMIT_SECRET=your_secret_key
+ADMIN_EMAILS=admin@example.com
+CORS_ORIGINS=http://localhost:3000
+```
+
+Frontend `.env`:
+
+```
+REACT_APP_BACKEND_URL=http://localhost:8001
+WDS_SOCKET_PORT=443
+ENABLE_HEALTH_CHECK=false
 ```
 
 ---
@@ -176,6 +193,8 @@ PERMIT_SECRET=your_secret_key
 - Re-entrancy guards on all state-changing `ExecutionWallet` functions
 - `FreezeSlash` callable only by protocol-authorized addresses
 - Collateral withdrawal requires a cooldown period
+- Privileged protocol routes are admin-gated via `ADMIN_EMAILS`
+- Sensitive signing material is loaded from environment (`PERMIT_SECRET`) and should never be committed
 
 ---
 
