@@ -195,6 +195,20 @@ async def record_treasury_transaction(execution_id: str, total_fee: float):
     }
     await db.treasury_transactions.insert_one(tx)
 
+
+async def record_admin_audit(action: str, admin_user: Dict[str, Any], request: Request, payload: Dict[str, Any]):
+    entry = {
+        "id": str(uuid.uuid4()),
+        "action": action,
+        "admin_user_id": admin_user.get("user_id"),
+        "admin_email": admin_user.get("email"),
+        "ip": request.client.host if request.client else None,
+        "user_agent": request.headers.get("user-agent", ""),
+        "payload": payload,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    await db.admin_audit_log.insert_one(entry)
+
 # ─── AUTH ENDPOINTS ──────────────────────────────────────────────
 class SessionRequest(BaseModel):
     session_id: str
@@ -326,12 +340,13 @@ async def get_agent(agent_id: str):
     return agent
 
 @api_router.patch("/agents/{agent_id}/status")
-async def update_agent_status(agent_id: str, status: str = Query(...), _admin: Dict[str, Any] = Depends(require_admin_user)):
+async def update_agent_status(agent_id: str, request: Request, status: str = Query(...), admin_user: Dict[str, Any] = Depends(require_admin_user)):
     if status not in ["active", "paused", "frozen"]:
         raise HTTPException(400, "Invalid status")
     result = await db.agents.update_one({"id": agent_id}, {"$set": {"status": status}})
     if result.matched_count == 0:
         raise HTTPException(404, "Agent not found")
+    await record_admin_audit("agent_status_update", admin_user, request, {"agent_id": agent_id, "status": status})
     return {"message": f"Agent status updated to {status}"}
 
 # ─── EXECUTION ENDPOINTS ────────────────────────────────────────
@@ -492,7 +507,7 @@ async def get_execution(execution_id: str):
 
 # ─── FREEZE / SLASH ENDPOINTS ───────────────────────────────────
 @api_router.post("/freeze/{agent_id}")
-async def freeze_agent(agent_id: str, body: FreezeRequest, _admin: Dict[str, Any] = Depends(require_admin_user)):
+async def freeze_agent(agent_id: str, body: FreezeRequest, request: Request, admin_user: Dict[str, Any] = Depends(require_admin_user)):
     agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
     if not agent:
         raise HTTPException(404, "Agent not found")
@@ -511,11 +526,12 @@ async def freeze_agent(agent_id: str, body: FreezeRequest, _admin: Dict[str, Any
     }
     await db.freeze_events.insert_one(event)
     await update_reputation(agent_id, -REP_FREEZE_PENALTY, f"Frozen: {body.reason}")
+    await record_admin_audit("agent_freeze", admin_user, request, {"agent_id": agent_id, "reason": body.reason})
     event.pop("_id", None)
     return event
 
 @api_router.post("/slash/{agent_id}")
-async def slash_agent(agent_id: str, body: SlashRequest, _admin: Dict[str, Any] = Depends(require_admin_user)):
+async def slash_agent(agent_id: str, body: SlashRequest, request: Request, admin_user: Dict[str, Any] = Depends(require_admin_user)):
     agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
     if not agent:
         raise HTTPException(404, "Agent not found")
@@ -539,6 +555,7 @@ async def slash_agent(agent_id: str, body: SlashRequest, _admin: Dict[str, Any] 
     }
     await db.freeze_events.insert_one(event)
     await update_reputation(agent_id, -REP_SLASH_PENALTY, f"Slashed: {body.reason}")
+    await record_admin_audit("agent_slash", admin_user, request, {"agent_id": agent_id, "reason": body.reason, "amount": slash_amount})
     event.pop("_id", None)
     return {**event, "collateral_remaining": new_collateral}
 
@@ -818,7 +835,7 @@ async def get_contract_architecture():
 
 # ─── SIMULATION ENDPOINT ────────────────────────────────────────
 @api_router.post("/simulate/lifecycle")
-async def simulate_full_lifecycle(_admin: Dict[str, Any] = Depends(require_admin_user)):
+async def simulate_full_lifecycle(request: Request, admin_user: Dict[str, Any] = Depends(require_admin_user)):
     """Simulates the complete AVAIRA execution lifecycle end-to-end."""
     steps = []
 
@@ -858,13 +875,15 @@ async def simulate_full_lifecycle(_admin: Dict[str, Any] = Depends(require_admin
     final_agent = await db.agents.find_one({"id": agent["id"]}, {"_id": 0})
     treasury_stats = await get_treasury_stats()
 
-    return {
+    result = {
         "simulation_id": str(uuid.uuid4()),
         "steps": steps,
         "final_agent_state": final_agent,
         "treasury_stats": treasury_stats,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+    await record_admin_audit("simulate_lifecycle", admin_user, request, {"simulation_id": result["simulation_id"], "agent_id": agent["id"]})
+    return result
 
 # ─── AVAIRA SCORE ENGINE ─────────────────────────────────────────
 def calculate_avaira_score(agent: Dict) -> Dict:
@@ -1019,7 +1038,7 @@ async def stake_on_mission(mission_id: str, body: MissionStake):
     return updated
 
 @api_router.post("/missions/{mission_id}/settle")
-async def settle_mission(mission_id: str, success: bool = True, _admin: Dict[str, Any] = Depends(require_admin_user)):
+async def settle_mission(mission_id: str, request: Request, success: bool = True, admin_user: Dict[str, Any] = Depends(require_admin_user)):
     mission = await db.missions.find_one({"id": mission_id}, {"_id": 0})
     if not mission:
         raise HTTPException(404, "Mission not found")
@@ -1038,6 +1057,7 @@ async def settle_mission(mission_id: str, success: bool = True, _admin: Dict[str
         await db.missions.update_one({"id": mission_id}, {"$set": {"status": "settled", "result": "success", "settled_at": datetime.now(timezone.utc).isoformat()}})
         rev_entry = {"id": str(uuid.uuid4()), "type": "underwriting", "mission_id": mission_id, "amount": protocol_fee, "timestamp": datetime.now(timezone.utc).isoformat()}
         await db.revenue_events.insert_one(rev_entry)
+        await record_admin_audit("mission_settle", admin_user, request, {"mission_id": mission_id, "success": True})
         return {"status": "settled", "result": "success", "agent_payout": agent_payout, "underwriter_payout": uw_total, "protocol_fee": protocol_fee}
     else:
         slash_total = mission["total_staked"] * 0.5
@@ -1047,6 +1067,7 @@ async def settle_mission(mission_id: str, success: bool = True, _admin: Dict[str
             await db.underwriters.update_one({"id": uw_stake["underwriter_id"]}, {"$inc": {"capital_staked": -uw_stake["amount"], "capital_available": uw_stake["amount"] - loss, "missions_underwritten": 1}})
         await update_reputation(mission["agent_id"], -REP_FAILURE_PENALTY, f"Mission failed: {mission['description'][:40]}")
         await db.missions.update_one({"id": mission_id}, {"$set": {"status": "settled", "result": "failed", "settled_at": datetime.now(timezone.utc).isoformat()}})
+        await record_admin_audit("mission_settle", admin_user, request, {"mission_id": mission_id, "success": False})
         return {"status": "settled", "result": "failed", "coverage_provided": slash_total}
 
 # ─── REVENUE STREAMS ENDPOINT ───────────────────────────────────

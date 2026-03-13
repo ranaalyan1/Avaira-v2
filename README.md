@@ -198,6 +198,7 @@ ENABLE_HEALTH_CHECK=false
 - Privileged protocol routes are admin-gated via `ADMIN_EMAILS`
 - Sensitive signing material is loaded from environment (`PERMIT_SECRET`) and should never be committed
 - The simulation lifecycle endpoint is admin-gated to prevent public abuse/data spam
+- Privileged admin actions are written to an audit log with actor and request metadata
 
 ---
 
