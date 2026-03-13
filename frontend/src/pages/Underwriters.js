@@ -3,12 +3,15 @@ import axios from "axios";
 import { Users, Wallet, TrendingUp, Shield, Plus, Zap, RefreshCw, CheckCircle, XCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { useAuth } from "@/App";
 
 import { API } from "@/lib/api";
 
 const GRADE_COLORS = { AAA: '#39FF14', AA: '#00F0FF', A: '#00F0FF', BBB: '#FFD300', BB: '#FFD300', B: '#FF8C00', CCC: '#FF003C', D: '#FF003C' };
 
 export default function Underwriters() {
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
   const [underwriters, setUnderwriters] = useState([]);
   const [missions, setMissions] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -37,6 +40,8 @@ export default function Underwriters() {
 
   const handleRegisterUW = async (e) => {
     e.preventDefault();
+    if (!uwForm.name.trim()) return toast.error("Name is required");
+    if (parseFloat(uwForm.capital_amount) <= 0) return toast.error("Capital must be greater than 0");
     try {
       await axios.post(`${API}/underwriters/register`, { name: uwForm.name, capital_amount: parseFloat(uwForm.capital_amount) });
       toast.success("Underwriter registered");
@@ -48,6 +53,9 @@ export default function Underwriters() {
 
   const handleCreateMission = async (e) => {
     e.preventDefault();
+    if (!missionForm.agent_id || !missionForm.description.trim()) return toast.error("Agent and description are required");
+    if (parseFloat(missionForm.target_value) <= 0) return toast.error("Mission value must be greater than 0");
+    if (parseInt(missionForm.duration_hours, 10) <= 0) return toast.error("Duration must be greater than 0 hours");
     try {
       await axios.post(`${API}/missions/create`, {
         agent_id: missionForm.agent_id,
@@ -66,6 +74,8 @@ export default function Underwriters() {
   const handleStake = async (e) => {
     e.preventDefault();
     if (!selectedMission) return;
+    if (!stakeForm.underwriter_id) return toast.error("Select an underwriter");
+    if (parseFloat(stakeForm.amount) <= 0) return toast.error("Stake amount must be greater than 0");
     try {
       await axios.post(`${API}/missions/${selectedMission.id}/stake`, { underwriter_id: stakeForm.underwriter_id, amount: parseFloat(stakeForm.amount) });
       toast.success("Staked successfully");
@@ -76,6 +86,9 @@ export default function Underwriters() {
   };
 
   const handleSettle = async (missionId, success) => {
+    if (!isAdmin) return toast.error("Admin only action");
+    const label = success ? "settle as SUCCESS" : "mark as FAILED";
+    if (!window.confirm(`This action is irreversible. Continue to ${label}?`)) return;
     try {
       const res = await axios.post(`${API}/missions/${missionId}/settle?success=${success}`);
       toast.success(`Mission ${res.data.result}: ${success ? `Agent: ${res.data.agent_payout} / UW: ${res.data.underwriter_payout}` : 'Coverage provided'}`);
@@ -122,7 +135,7 @@ export default function Underwriters() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Value (AVAX)</label>
-                    <input data-testid="mission-value" type="number" step="0.1" value={missionForm.target_value} onChange={e => setMissionForm(p => ({ ...p, target_value: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
+                    <input data-testid="mission-value" type="number" step="0.1" min="0.1" value={missionForm.target_value} onChange={e => setMissionForm(p => ({ ...p, target_value: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
                   </div>
                   <div>
                     <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Risk Level</label>
@@ -132,6 +145,10 @@ export default function Underwriters() {
                       <option value="high">HIGH</option>
                     </select>
                   </div>
+                </div>
+                <div>
+                  <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Duration (hours)</label>
+                  <input data-testid="mission-duration" type="number" min="1" step="1" value={missionForm.duration_hours} onChange={e => setMissionForm(p => ({ ...p, duration_hours: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
                 </div>
                 <button data-testid="submit-mission-btn" type="submit" className="w-full cyber-btn bg-avaira-purple text-white py-2 font-heading text-sm">CREATE MISSION</button>
               </form>
@@ -148,11 +165,11 @@ export default function Underwriters() {
               <form onSubmit={handleRegisterUW} className="space-y-3 mt-2" data-testid="register-uw-form">
                 <div>
                   <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Name</label>
-                  <input data-testid="uw-name-input" value={uwForm.name} onChange={e => setUwForm(p => ({ ...p, name: e.target.value }))} placeholder="Underwriter Alpha" className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
+                  <input data-testid="uw-name-input" value={uwForm.name} onChange={e => setUwForm(p => ({ ...p, name: e.target.value }))} placeholder="Underwriter Alpha" required className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
                 </div>
                 <div>
                   <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Capital (AVAX)</label>
-                  <input data-testid="uw-capital-input" type="number" step="0.1" value={uwForm.capital_amount} onChange={e => setUwForm(p => ({ ...p, capital_amount: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
+                  <input data-testid="uw-capital-input" type="number" step="0.1" min="0.5" value={uwForm.capital_amount} onChange={e => setUwForm(p => ({ ...p, capital_amount: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
                 </div>
                 <button data-testid="submit-uw-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm">REGISTER & DEPOSIT</button>
               </form>
@@ -217,12 +234,14 @@ export default function Underwriters() {
                         <button
                           data-testid={`settle-success-${m.id}`}
                           onClick={() => handleSettle(m.id, true)}
-                          className="font-mono text-[10px] px-2 py-1 border border-green-500/50 text-green-400 hover:bg-green-500/10 transition-colors"
+                          disabled={!isAdmin}
+                          className="font-mono text-[10px] px-2 py-1 border border-green-500/50 text-green-400 hover:bg-green-500/10 transition-colors disabled:opacity-40"
                         ><CheckCircle size={10} className="inline mr-0.5" />SETTLE</button>
                         <button
                           data-testid={`settle-fail-${m.id}`}
                           onClick={() => handleSettle(m.id, false)}
-                          className="font-mono text-[10px] px-2 py-1 border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors"
+                          disabled={!isAdmin}
+                          className="font-mono text-[10px] px-2 py-1 border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
                         ><XCircle size={10} className="inline mr-0.5" />FAIL</button>
                       </div>
                     </div>
@@ -299,7 +318,7 @@ export default function Underwriters() {
               </div>
               <div>
                 <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Amount (AVAX)</label>
-                <input data-testid="stake-amount-input" type="number" step="0.1" value={stakeForm.amount} onChange={e => setStakeForm(p => ({ ...p, amount: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
+                <input data-testid="stake-amount-input" type="number" step="0.1" min="0.1" value={stakeForm.amount} onChange={e => setStakeForm(p => ({ ...p, amount: e.target.value }))} className="w-full bg-black border border-white/20 text-white font-mono text-sm p-2 outline-none" />
               </div>
               <button data-testid="submit-stake-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm">STAKE CAPITAL</button>
             </form>

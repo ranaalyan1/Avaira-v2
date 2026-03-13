@@ -67,13 +67,13 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Skip link */}
+        {/* Back link */}
         <button
-          data-testid="skip-login-btn"
-          onClick={() => navigate('/dashboard')}
+          data-testid="back-home-btn"
+          onClick={() => navigate('/')}
           className="block mx-auto mt-4 font-mono text-[10px] text-avaira-dim hover:text-avaira-muted transition-colors uppercase tracking-wider"
         >
-          Skip &mdash; Explore Protocol
+          Back to Home
         </button>
       </div>
     </div>

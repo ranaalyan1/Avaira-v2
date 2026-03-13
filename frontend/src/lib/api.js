@@ -1,3 +1,5 @@
+import axios from "axios";
+
 const rawBase = process.env.REACT_APP_BACKEND_URL;
 
 if (!rawBase && typeof window !== "undefined") {
@@ -7,3 +9,7 @@ if (!rawBase && typeof window !== "undefined") {
 
 export const API_BASE = (rawBase || (typeof window !== "undefined" ? window.location.origin : "http://localhost:8001")).replace(/\/$/, "");
 export const API = `${API_BASE}/api`;
+
+// Use cookie-based sessions consistently across all API calls.
+axios.defaults.withCredentials = true;
+axios.defaults.timeout = 15000;

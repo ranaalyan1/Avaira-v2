@@ -26,9 +26,17 @@ from urllib.parse import urlencode, urlparse
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
+def _get_required_env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
+mongo_url = _get_required_env("MONGO_URL")
+db_name = _get_required_env("DB_NAME")
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[db_name]
 api_router = APIRouter(prefix="/api")
 
 # ─── PROTOCOL CONSTANTS ─────────────────────────────────────────
@@ -53,14 +61,6 @@ SUBSCRIPTION_TIERS = {
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-
-def _get_required_env(name: str) -> str:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
-
 
 PERMIT_SECRET = _get_required_env("PERMIT_SECRET")
 ADMIN_EMAILS = {email.strip().lower() for email in os.environ.get("ADMIN_EMAILS", "").split(",") if email.strip()}
@@ -568,6 +568,7 @@ async def get_current_user(request: Request):
     user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
     if not user:
         raise HTTPException(401, "User not found")
+    user["is_admin"] = (user.get("email", "").lower() in ADMIN_EMAILS)
     return user
 
 

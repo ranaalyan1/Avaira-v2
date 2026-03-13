@@ -3,10 +3,13 @@ import axios from "axios";
 import { ShieldOff, Snowflake, Scissors, AlertTriangle, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { useAuth } from "@/App";
 
 import { API } from "@/lib/api";
 
 export default function FreezeSlash() {
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
   const [events, setEvents] = useState([]);
   const [agents, setAgents] = useState([]);
   const [freezeOpen, setFreezeOpen] = useState(false);
@@ -32,7 +35,9 @@ export default function FreezeSlash() {
 
   const handleFreeze = async (e) => {
     e.preventDefault();
+    if (!isAdmin) return toast.error("Admin only action");
     if (!freezeForm.agent_id) return toast.error("Select an agent");
+    if (!freezeForm.reason.trim()) return toast.error("Reason is required");
     try {
       await axios.post(`${API}/freeze/${freezeForm.agent_id}`, { reason: freezeForm.reason });
       toast.success("Agent frozen");
@@ -46,7 +51,10 @@ export default function FreezeSlash() {
 
   const handleSlash = async (e) => {
     e.preventDefault();
+    if (!isAdmin) return toast.error("Admin only action");
     if (!slashForm.agent_id) return toast.error("Select an agent");
+    if (!slashForm.reason.trim()) return toast.error("Reason is required");
+    if (slashForm.amount && parseFloat(slashForm.amount) <= 0) return toast.error("Slash amount must be greater than 0");
     try {
       await axios.post(`${API}/slash/${slashForm.agent_id}`, {
         reason: slashForm.reason,
@@ -72,10 +80,11 @@ export default function FreezeSlash() {
           <button data-testid="refresh-freeze-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-cyan hover:border-avaira-cyan transition-colors">
             <RefreshCw size={14} />
           </button>
+          {!isAdmin && <span className="font-mono text-[10px] text-avaira-dim uppercase tracking-wider">Admin Only Controls</span>}
           {/* Freeze Dialog */}
           <Dialog open={freezeOpen} onOpenChange={setFreezeOpen}>
             <DialogTrigger asChild>
-              <button data-testid="freeze-agent-btn" className="cyber-btn bg-avaira-red text-white px-4 py-2 font-heading text-sm flex items-center gap-2">
+              <button data-testid="freeze-agent-btn" disabled={!isAdmin} className="cyber-btn bg-avaira-red text-white px-4 py-2 font-heading text-sm flex items-center gap-2 disabled:opacity-40">
                 <Snowflake size={14} /> FREEZE AGENT
               </button>
             </DialogTrigger>
@@ -103,6 +112,7 @@ export default function FreezeSlash() {
                     value={freezeForm.reason}
                     onChange={(e) => setFreezeForm(p => ({ ...p, reason: e.target.value }))}
                     placeholder="Deviation from declared mission..."
+                    required
                     className="w-full bg-black border border-white/20 focus:border-avaira-red text-white font-mono text-sm p-2 outline-none h-20 resize-none"
                   />
                 </div>
@@ -113,7 +123,7 @@ export default function FreezeSlash() {
           {/* Slash Dialog */}
           <Dialog open={slashOpen} onOpenChange={setSlashOpen}>
             <DialogTrigger asChild>
-              <button data-testid="slash-agent-btn" className="cyber-btn border border-avaira-yellow text-avaira-yellow px-4 py-2 font-heading text-sm flex items-center gap-2">
+              <button data-testid="slash-agent-btn" disabled={!isAdmin} className="cyber-btn border border-avaira-yellow text-avaira-yellow px-4 py-2 font-heading text-sm flex items-center gap-2 disabled:opacity-40">
                 <Scissors size={14} /> SLASH
               </button>
             </DialogTrigger>
@@ -141,6 +151,7 @@ export default function FreezeSlash() {
                     value={slashForm.reason}
                     onChange={(e) => setSlashForm(p => ({ ...p, reason: e.target.value }))}
                     placeholder="Critical deviation..."
+                    required
                     className="w-full bg-black border border-white/20 focus:border-avaira-yellow text-white font-mono text-sm p-2 outline-none h-20 resize-none"
                   />
                 </div>
@@ -150,6 +161,7 @@ export default function FreezeSlash() {
                     data-testid="slash-amount-input"
                     type="number"
                     step="0.01"
+                    min="0.01"
                     value={slashForm.amount}
                     onChange={(e) => setSlashForm(p => ({ ...p, amount: e.target.value }))}
                     placeholder="Auto: 50% of remaining collateral"

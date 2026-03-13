@@ -3,6 +3,7 @@ import axios from "axios";
 import { UserPlus, Shield, Zap, AlertTriangle, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { useAuth } from "@/App";
 
 import { API } from "@/lib/api";
 
@@ -21,11 +22,14 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const AgentCard = ({ agent, onRefresh, scores }) => {
+const AgentCard = ({ agent, onRefresh, scores, canManage }) => {
   const score = scores.find(s => s.agent_id === agent.id);
   const handleToggleStatus = async () => {
     const newStatus = agent.status === "active" ? "paused" : "active";
     if (agent.status === "frozen") return toast.error("Cannot change status of frozen agent");
+    if (!canManage) {
+      return toast.error("Admin only action");
+    }
     try {
       await axios.patch(`${API}/agents/${agent.id}/status?status=${newStatus}`);
       toast.success(`Agent ${newStatus}`);
@@ -79,10 +83,10 @@ const AgentCard = ({ agent, onRefresh, scores }) => {
         <button
           data-testid={`toggle-status-${agent.id}`}
           onClick={handleToggleStatus}
-          disabled={agent.status === "frozen"}
+          disabled={agent.status === "frozen" || !canManage}
           className="font-mono text-[10px] uppercase tracking-wider px-2 py-1 border border-avaira-border text-avaira-muted hover:text-avaira-cyan hover:border-avaira-cyan transition-colors disabled:opacity-30"
         >
-          {agent.status === "active" ? "PAUSE" : agent.status === "frozen" ? "FROZEN" : "ACTIVATE"}
+          {!canManage ? "ADMIN ONLY" : agent.status === "active" ? "PAUSE" : agent.status === "frozen" ? "FROZEN" : "ACTIVATE"}
         </button>
       </div>
     </div>
@@ -90,6 +94,8 @@ const AgentCard = ({ agent, onRefresh, scores }) => {
 };
 
 export default function AgentRegistry() {
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
   const [agents, setAgents] = useState([]);
   const [scores, setScores] = useState([]);
   const [open, setOpen] = useState(false);
@@ -113,6 +119,12 @@ export default function AgentRegistry() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (!form.name.trim() || !form.mission_intent.trim()) {
+      return toast.error("Name and mission intent are required");
+    }
+    if (parseFloat(form.collateral_amount) <= 0) {
+      return toast.error("Collateral must be greater than 0");
+    }
     try {
       await axios.post(`${API}/agents/register`, {
         name: form.name,
@@ -135,7 +147,7 @@ export default function AgentRegistry() {
     }
   };
 
-  const renderInput = (label, name, type = "text", placeholder = "") => (
+  const renderInput = (label, name, type = "text", placeholder = "", min = undefined) => (
     <div>
       <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">{label}</label>
       <input
@@ -144,6 +156,8 @@ export default function AgentRegistry() {
         value={form[name]}
         onChange={(e) => setForm(prev => ({ ...prev, [name]: e.target.value }))}
         placeholder={placeholder}
+        min={min}
+        required={name === "name" || name === "mission_intent"}
         className="w-full bg-black border border-white/20 focus:border-avaira-cyan text-white font-mono text-sm p-2 outline-none transition-colors"
       />
     </div>
@@ -173,15 +187,15 @@ export default function AgentRegistry() {
               <form onSubmit={handleRegister} className="space-y-3 mt-2" data-testid="register-agent-form">
                 {renderInput("Agent Name", "name", "text", "TradingBot-Alpha")}
                 {renderInput("Wallet Address (optional)", "wallet_address", "text", "0x...")}
-                {renderInput("Collateral (AVAX)", "collateral_amount", "number", "1.0")}
+                {renderInput("Collateral (AVAX)", "collateral_amount", "number", "1.0", "0.1")}
                 {renderInput("Mission Intent", "mission_intent", "text", "DeFi yield optimization")}
                 <div className="border-t border-avaira-border pt-3">
                   <p className="font-heading font-semibold text-xs uppercase tracking-wider text-avaira-cyan mb-2">Risk Envelope</p>
                   <div className="grid grid-cols-2 gap-3">
-                    {renderInput("Max TX Value", "max_tx_value", "number")}
-                    {renderInput("Max Daily TXNs", "max_daily_txns", "number")}
+                    {renderInput("Max TX Value", "max_tx_value", "number", "", "0")}
+                    {renderInput("Max Daily TXNs", "max_daily_txns", "number", "", "1")}
                     {renderInput("Allowed Actions", "allowed_actions", "text", "transfer,swap,stake")}
-                    {renderInput("Max Slippage", "max_slippage", "number")}
+                    {renderInput("Max Slippage", "max_slippage", "number", "", "0")}
                   </div>
                 </div>
                 <button data-testid="submit-register-btn" type="submit" className="w-full cyber-btn bg-avaira-cyan text-white py-2 font-heading text-sm mt-2">
@@ -201,7 +215,7 @@ export default function AgentRegistry() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {agents.map(agent => <AgentCard key={agent.id} agent={agent} onRefresh={fetchAgents} scores={scores} />)}
+          {agents.map(agent => <AgentCard key={agent.id} agent={agent} onRefresh={fetchAgents} scores={scores} canManage={isAdmin} />)}
         </div>
       )}
     </div>
