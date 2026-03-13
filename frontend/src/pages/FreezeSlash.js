@@ -38,6 +38,7 @@ export default function FreezeSlash() {
     if (!isAdmin) return toast.error("Admin only action");
     if (!freezeForm.agent_id) return toast.error("Select an agent");
     if (!freezeForm.reason.trim()) return toast.error("Reason is required");
+    if (!window.confirm("Freeze this agent now? This blocks future executions until manually changed.")) return;
     try {
       await axios.post(`${API}/freeze/${freezeForm.agent_id}`, { reason: freezeForm.reason });
       toast.success("Agent frozen");
@@ -55,6 +56,7 @@ export default function FreezeSlash() {
     if (!slashForm.agent_id) return toast.error("Select an agent");
     if (!slashForm.reason.trim()) return toast.error("Reason is required");
     if (slashForm.amount && parseFloat(slashForm.amount) <= 0) return toast.error("Slash amount must be greater than 0");
+    if (!window.confirm("Slash collateral now? This action is irreversible.")) return;
     try {
       await axios.post(`${API}/slash/${slashForm.agent_id}`, {
         reason: slashForm.reason,

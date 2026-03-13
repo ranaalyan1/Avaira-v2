@@ -57,7 +57,13 @@ export default function Dashboard() {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    const pollId = setInterval(() => {
+      fetchData();
+    }, 15000);
+    return () => clearInterval(pollId);
+  }, [fetchData]);
 
   const runSimulation = async () => {
     setSimulating(true);

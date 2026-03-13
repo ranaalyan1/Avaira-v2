@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Shield, FileKey, Heart, Zap, TrendingUp, Lock, Database, Globe, ChevronRight, Code, Users, Wallet, ArrowRight, LogIn } from "lucide-react";
+import { useAuth } from "@/App";
 
 const PILLARS = [
   { icon: TrendingUp, title: "RATE", subtitle: "The Moody's Function", color: "#00F0FF", desc: "Every AI agent gets an Avaira Score (AAA to D). No enterprise will trust an unrated agent. The rating becomes the standard.", stat: "$50B+ market" },
@@ -44,6 +45,15 @@ const settlement = await avaira.settle(mission.id);`;
 
 export default function Landing() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const goToProtocol = () => {
+    if (user) {
+      navigate('/dashboard');
+      return;
+    }
+    navigate('/login?redirect=/dashboard');
+  };
 
   return (
     <div className="min-h-screen bg-avaira-bg text-foreground overflow-x-hidden" data-testid="landing-page">
@@ -68,7 +78,7 @@ export default function Landing() {
             </button>
             <button
               data-testid="launch-protocol-btn"
-              onClick={() => navigate('/dashboard')}
+              onClick={goToProtocol}
               className="cyber-btn bg-avaira-cyan text-white px-4 py-2 font-heading text-xs flex items-center gap-1.5"
             >
               LAUNCH PROTOCOL <ChevronRight size={14} />
@@ -95,7 +105,7 @@ export default function Landing() {
           <div className="flex items-center gap-4 mt-8">
             <button
               data-testid="hero-launch-btn"
-              onClick={() => navigate('/dashboard')}
+              onClick={goToProtocol}
               className="cyber-btn bg-avaira-cyan text-white px-6 py-3 font-heading text-sm flex items-center gap-2"
             >
               LAUNCH PROTOCOL <ArrowRight size={16} />
@@ -299,7 +309,7 @@ export default function Landing() {
           </p>
           <button
             data-testid="cta-launch-btn"
-            onClick={() => navigate('/dashboard')}
+            onClick={goToProtocol}
             className="cyber-btn bg-avaira-cyan text-white px-8 py-3 font-heading text-sm mt-8 inline-flex items-center gap-2"
           >
             LAUNCH AVAIRA PROTOCOL <ArrowRight size={16} />
@@ -315,7 +325,10 @@ export default function Landing() {
             <span className="font-heading font-bold text-sm text-avaira-cyan uppercase">AVAIRA</span>
             <span className="font-mono text-[9px] text-avaira-dim ml-2">AVALANCHE L1</span>
           </div>
-          <p className="font-mono text-[10px] text-avaira-dim">EXECUTION CONTROL PROTOCOL v1.0</p>
+          <div className="text-right">
+            <p className="font-mono text-[10px] text-avaira-dim">EXECUTION CONTROL PROTOCOL v1.0 | {new Date().getFullYear()} AVAIRA</p>
+            <p className="font-mono text-[10px] text-avaira-dim">github.com/ranaalyan1/Avaira.xyz</p>
+          </div>
         </div>
       </footer>
     </div>
