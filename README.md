@@ -199,6 +199,7 @@ ENABLE_HEALTH_CHECK=false
 - Sensitive signing material is loaded from environment (`PERMIT_SECRET`) and should never be committed
 - The simulation lifecycle endpoint is admin-gated to prevent public abuse/data spam
 - Privileged admin actions are written to an audit log with actor and request metadata
+- Lightweight rate limiting protects auth session creation and admin action endpoints
 
 ---
 

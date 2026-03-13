@@ -14,6 +14,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
+import time
+import asyncio
 from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
@@ -59,6 +61,27 @@ def _get_required_env(name: str) -> str:
 
 PERMIT_SECRET = _get_required_env("PERMIT_SECRET")
 ADMIN_EMAILS = {email.strip().lower() for email in os.environ.get("ADMIN_EMAILS", "").split(",") if email.strip()}
+RATE_LIMIT_STATE: Dict[str, List[float]] = {}
+RATE_LIMIT_LOCK = asyncio.Lock()
+
+
+def _get_client_ip(request: Request) -> str:
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+async def enforce_rate_limit(request: Request, scope: str, limit: int, window_seconds: int, identity: Optional[str] = None):
+    now = time.time()
+    key = f"{scope}:{identity or _get_client_ip(request)}"
+    async with RATE_LIMIT_LOCK:
+        timestamps = RATE_LIMIT_STATE.get(key, [])
+        timestamps = [ts for ts in timestamps if now - ts < window_seconds]
+        if len(timestamps) >= limit:
+            retry_after = max(1, int(window_seconds - (now - timestamps[0])))
+            raise HTTPException(429, f"Rate limit exceeded. Retry in {retry_after} seconds")
+        timestamps.append(now)
+        RATE_LIMIT_STATE[key] = timestamps
 
 # ─── PYDANTIC MODELS ────────────────────────────────────────────
 class RiskEnvelope(BaseModel):
@@ -214,7 +237,8 @@ class SessionRequest(BaseModel):
     session_id: str
 
 @api_router.post("/auth/session")
-async def create_auth_session(body: SessionRequest):
+async def create_auth_session(body: SessionRequest, request: Request):
+    await enforce_rate_limit(request, "auth_session", limit=30, window_seconds=60)
     # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     async with httpx.AsyncClient() as client:
         response = await client.get(
@@ -286,6 +310,7 @@ async def require_admin_user(request: Request) -> Dict[str, Any]:
         raise HTTPException(503, "Server admin configuration missing")
     user = await get_current_user(request)
     email = (user.get("email") or "").lower()
+    await enforce_rate_limit(request, "admin_actions", limit=60, window_seconds=60, identity=email or None)
     if email not in ADMIN_EMAILS:
         raise HTTPException(403, "Admin privileges required")
     return user
