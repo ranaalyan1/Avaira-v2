@@ -2,43 +2,58 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./AgentRegistry.sol";
 
-contract FreezeSlash is Ownable {
-    AgentRegistry public registry;
+/// @title AVAIRA FreezeSlash Controller
+/// @notice Provides protocol-authorized freeze and slash enforcement with audit events.
+contract FreezeSlash is Ownable, ReentrancyGuard {
+    AgentRegistry public immutable registry;
 
-    struct SlashEvent {
-        bytes32 agentId;
-        uint256 amount;
-        string reason;
-        uint256 timestamp;
+    mapping(address => bool) public protocolAuthorized;
+
+    event ProtocolAuthorizationUpdated(address indexed actor, bool authorized);
+    event FreezeAndSlashAudit(address indexed actor, address indexed agent, uint256 slashAmount, string reason, uint256 timestamp);
+
+    error FreezeSlash__NotProtocolAuthorized();
+    error FreezeSlash__EmptyReason();
+
+    modifier onlyProtocolAuthorized() {
+        if (!(protocolAuthorized[msg.sender] || msg.sender == owner())) {
+            revert FreezeSlash__NotProtocolAuthorized();
+        }
+        _;
     }
 
-    mapping(bytes32 => SlashEvent[]) public slashHistory;
-    uint256 public constant DEFAULT_SLASH_RATE_BPS = 5000;
-
-    event AgentFrozen(bytes32 indexed agentId, string reason, uint256 timestamp);
-    event CollateralSlashed(bytes32 indexed agentId, uint256 amount, string reason);
-    event AgentUnfrozen(bytes32 indexed agentId);
-
-    constructor(address _registry) Ownable(msg.sender) {
-        registry = AgentRegistry(_registry);
+    constructor(address registryAddress) Ownable(msg.sender) {
+        registry = AgentRegistry(registryAddress);
     }
 
-    function freezeAgent(bytes32 agentId, string calldata reason) external onlyOwner {
-        registry.updateStatus(agentId, AgentRegistry.AgentStatus.Frozen);
-        emit AgentFrozen(agentId, reason, block.timestamp);
+    /// @notice Adds or removes a protocol-authorized caller.
+    /// @param actor The caller address.
+    /// @param authorized Whether the caller should be authorized.
+    function setProtocolAuthorized(address actor, bool authorized) external onlyOwner {
+        protocolAuthorized[actor] = authorized;
+        emit ProtocolAuthorizationUpdated(actor, authorized);
     }
 
-    function slashCollateral(bytes32 agentId, uint256 amount, string calldata reason) external onlyOwner returns (uint256) {
-        uint256 slashed = registry.slashCollateral(agentId, amount);
-        slashHistory[agentId].push(SlashEvent(agentId, slashed, reason, block.timestamp));
-        emit CollateralSlashed(agentId, slashed, reason);
-        return slashed;
-    }
-
-    function unfreezeAgent(bytes32 agentId) external onlyOwner {
-        registry.updateStatus(agentId, AgentRegistry.AgentStatus.Active);
-        emit AgentUnfrozen(agentId);
+    /// @notice Freezes an agent and slashes collateral in a single audited action.
+    /// @param agent The agent wallet address.
+    /// @param slashAmount The slash amount denominated in wei.
+    /// @param reason Human-readable reason for the action.
+    /// @return actualSlashed The final slash amount applied.
+    function freezeAndSlash(address agent, uint256 slashAmount, string calldata reason)
+        external
+        onlyProtocolAuthorized
+        nonReentrant
+        returns (uint256 actualSlashed)
+    {
+        if (bytes(reason).length == 0) {
+            revert FreezeSlash__EmptyReason();
+        }
+        registry.freeze(agent, reason);
+        actualSlashed = registry.slash(agent, slashAmount, reason);
+        registry.updateReputation(agent, -20, "freeze_and_slash");
+        emit FreezeAndSlashAudit(msg.sender, agent, actualSlashed, reason, block.timestamp);
     }
 }

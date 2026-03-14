@@ -1,228 +1,195 @@
 # AVAIRA Protocol
+> The trust layer for AI agents on Avalanche. Agents stake collateral, declare risk boundaries, and get automatically slashed if they deviate.
 
-**Trustless Execution Infrastructure for AI Agents on Avalanche**
+## 🔴 Live Demo
+[Live App](https://avaira.xyz) | Demo Video: [Coming Soon](https://buil.avax.network)
 
-AVAIRA is a Web3 protocol that brings accountability, transparency, and enforcement to autonomous AI agent execution. Agents register with collateral, declare mission intents, and execute on-chain actions — all governed by risk envelopes, EIP-712 signed permits, and a reputation engine.
+## 📍 Deployed Contracts (Avalanche Fuji Testnet)
 
----
+| Contract | Address | Explorer |
+|---|---|---|
+| AgentRegistry | `0x0000000000000000000000000000000000000000` | `https://testnet.snowtrace.io/address/0x0000000000000000000000000000000000000000` |
+| ExecutionWallet | `0x0000000000000000000000000000000000000000` | `https://testnet.snowtrace.io/address/0x0000000000000000000000000000000000000000` |
+| FreezeSlash | `0x0000000000000000000000000000000000000000` | `https://testnet.snowtrace.io/address/0x0000000000000000000000000000000000000000` |
+| ReputationEngine | `0x0000000000000000000000000000000000000000` | `https://testnet.snowtrace.io/address/0x0000000000000000000000000000000000000000` |
 
-## What is AVAIRA?
+## 🧠 What is AVAIRA?
 
-As AI agents begin operating autonomously on-chain, there's no existing layer to verify they're doing what they claimed to do. AVAIRA solves this by acting as a **trustless enforcement layer** between AI agents and the blockchain:
+AI agents are starting to touch real capital, but most stacks still assume an agent can be trusted if it says the right thing. That breaks the moment an autonomous system can move funds without a verifiable boundary.
 
-- Agents **stake collateral** to back their declared mission intent
-- Every execution is **validated against a risk envelope**
-- Transactions are **signed via EIP-712 permits** before execution
-- Agents that deviate are **instantly frozen and slashed**
-- A **reputation score (Avaira Score)** tracks on-chain behavioral history
+AVAIRA is the missing trust layer:
 
----
+- Agents stake collateral before they can operate
+- Agents declare risk boundaries up front
+- Execution intents are validated before they move value
+- Deviations can trigger freeze and slash enforcement
+- Reputation becomes a measurable, queryable signal instead of marketing
 
-## Architecture
+Why Avalanche:
 
-### Smart Contracts (Avalanche Fuji / Mainnet)
+- Fast finality keeps agent execution UX tight
+- Low fees make policy-enforced execution viable for high-frequency activity
+- Avalanche architecture is well suited to future dedicated AI-agent subnets and app-specific trust domains
 
-| Contract | Description |
+## 💡 How It Works
+
+```text
+Register Agent
+	|
+	v
+Declare Risk Envelope
+	|
+	v
+AI Agent Thinks
+	|
+	v
+AVAIRA Validates Intent
+	|
+	v
+EIP-712 Permit Issued
+	|
+	v
+Execution Attempted
+	|
+	+--> Success -> Fee Split -> Score Update
+	|
+	+--> Deviation -> Freeze -> Slash -> Score Penalty
+```
+
+1. Register with collateral and mission goal.
+2. Store a declared risk envelope.
+3. Generate an AI execution intent.
+4. Validate the intent against the declared envelope.
+5. Generate a replay-safe EIP-712 permit.
+6. Execute the approved action through protocol controls.
+7. Deduct the 0.5% execution fee.
+8. Update score or freeze/slash on deviation.
+
+## 🏗 Architecture
+
+### Smart Contracts
+
+| Contract | Responsibility |
 |---|---|
-| `AgentRegistry` | Registers agents, manages collateral and status |
-| `ExecutionWallet` | Verifies EIP-712 permits, executes transactions, deducts 0.5% fee |
-| `FreezeSlash` | Freezes agents and slashes collateral on risk envelope violation |
-| `Treasury` | Receives protocol fees — 75% to TrustPool, 25% to Protocol Revenue |
-| `ReputationEngine` | Tracks agent behavior scores (+2 success, -5 failure, -20 freeze) |
-| `InsurancePool` | Compensates backers if an agent execution fails |
+| `AgentRegistry.sol` | Stores agent registration, collateral, nonce, status, and risk envelope data |
+| `ExecutionWallet.sol` | Verifies EIP-712 permits, checks policy constraints, executes transactions, routes treasury fee |
+| `FreezeSlash.sol` | Freezes and slashes agents with protocol-authorized audit events |
+| `ReputationEngine.sol` | Computes composite Avaira score and grade from registry metrics |
+| `Treasury.sol` | Receives 0.5% execution fees and splits them 75% / 25% |
 
 ### Backend
-- **Python + FastAPI** — async REST API
-- **MongoDB (Motor)** — async database
-- **EIP-712 permit generation and verification**
+
+- FastAPI + Motor + MongoDB
+- Local deterministic `AvairaAgent` runtime
+- EIP-712 permit builder and verifier
+- Agent lifecycle simulator for judges and demos
+- OAuth + session-based admin/operator controls
 
 ### Frontend
-- **React** (Create React App + Craco)
-- **Tailwind CSS + shadcn/ui**
-- **Recharts** for analytics dashboards
 
----
+- React + Tailwind + shadcn/ui-inspired component patterns
+- Real-time agent leaderboard polling
+- AI intent runner and lifecycle simulator
+- Timeline visualization and reputation trend chart
+- Snowtrace links for deployed contracts and transactions
 
-## How It Works
-
-1. **Agent Registration** — An AI agent registers with a name, wallet address, minimum 0.1 AVAX collateral, and a declared `RiskEnvelope` (max tx value, allowed actions, max slippage)
-2. **Execution Request** — Agent submits an execution request (action, target, value)
-3. **Risk Validation** — AVAIRA checks the request against the agent's declared risk envelope
-4. **EIP-712 Permit** — If valid, a signed permit is generated with a nonce and 5-minute deadline
-5. **On-chain Execution** — ExecutionWallet verifies the permit and executes the transaction
-6. **Fee Deduction** — 0.5% protocol fee is deducted and sent to Treasury
-7. **Reputation Update** — Agent's Avaira Score is updated based on outcome
-8. **Freeze/Slash** — Any deviation triggers instant freeze and collateral slash
-
----
-
-## Avaira Score
-
-The Avaira Score is a composite trust rating for each agent:
+## 📊 Avaira Score
 
 | Factor | Weight |
 |---|---|
 | Success Rate | 30% |
-| Behavioral Consistency (Reputation) | 20% |
+| Behavior Consistency | 20% |
 | Collateral Ratio | 15% |
 | Mission Complexity | 15% |
 | Time on Network | 10% |
 | Deviation Penalty | 10% |
 
-Grades range from **AAA (90–100)** down to **D (0–29)**, with intermediate **AA, A, BBB, BB, B, and CCC** bands used throughout the protocol and UI.
+Grades:
 
----
+- `A+` = 90-100
+- `A` = 80-89
+- `B` = 70-79
+- `C` = 60-69
+- `D` = below 60
 
-## Underwriters & Missions
+## 🚀 GTM & Vision
 
-Underwriters can stake capital behind agent missions and earn a share of mission value on success:
+- One-liner: `Stripe for AI agent trust`
+- TAM: `$47B` AI agent market by 2030
+- Revenue: `0.5%` execution fee on all agent transactions
+- Path to `$1B`: `$10B annual volume × 0.5% = $50M revenue × 20x multiple`
 
-- **Agent earns:** 85% of mission value
-- **Underwriters earn:** 10% of mission value (split proportionally)
-- **Protocol takes:** 5% fee
+AVAIRA starts as a trust rail for autonomous on-chain agents and expands into compliance, underwriting, policy enforcement, and agent reputation infrastructure across Avalanche-native ecosystems.
 
-If a mission fails, underwriters lose 50% of their staked capital.
+## 🔒 Security
 
----
+- EIP-712 permits include chain-aware domain separation
+- Permit replay is blocked with nonce tracking and digest consumption
+- State-changing contract paths use ownership and reentrancy controls
+- Session tokens are hashed before persistence
+- Admin actions are logged with request metadata
+- Selected auth and admin flows are rate limited
+- Secrets are loaded from environment variables and should never be committed
+- This repo is a prototype and still requires security review before production deployment
 
-## API Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/agents/register` | Register a new agent |
-| GET | `/api/agents` | List all agents |
-| GET | `/api/agents/{id}/score` | Get agent's Avaira Score |
-| POST | `/api/executions/request` | Submit an execution request |
-| GET | `/api/executions` | List all executions |
-| POST | `/api/freeze/{agent_id}` | Freeze an agent |
-| POST | `/api/slash/{agent_id}` | Slash agent collateral |
-| GET | `/api/reputation/leaderboard` | Top agents by reputation |
-| GET | `/api/treasury/stats` | Protocol treasury statistics |
-| GET | `/api/dashboard/stats` | Full dashboard statistics |
-| POST | `/api/missions/create` | Create a mission |
-| POST | `/api/missions/{id}/stake` | Stake on a mission |
-| POST | `/api/missions/{id}/settle` | Settle a mission |
-| GET | `/api/revenue/streams` | Protocol revenue breakdown |
-| GET | `/api/contracts` | Smart contract architecture |
-| GET | `/api/sdk/docs` | SDK documentation |
-| POST | `/api/simulate/lifecycle` | Simulate full execution lifecycle |
-
----
-
-## SDK (Coming Soon)
-
-```typescript
-import { AvairaSDK } from '@avaira/sdk';
-
-const avaira = new AvairaSDK({
-  apiKey: 'your-api-key',
-  network: 'fuji', // or 'mainnet'
-  chainId: 43113
-});
-
-// Register agent
-const agent = await avaira.register(wallet, config);
-
-// Declare mission intent
-const mission = await avaira.declareIntent(plan);
-
-// Execute (monitored by AVAIRA)
-const result = await avaira.execute(action);
-
-// Settle and distribute rewards
-const settlement = await avaira.settle(mission.id);
-```
-
-Available in **TypeScript** and **Rust**.
-
----
-
-## Getting Started
+## ⚡ Quick Start
 
 ### Prerequisites
+
 - Python 3.11+
 - Node.js 18+
 - MongoDB
 
 ### Backend
+
 ```bash
 cd backend
-pip install -r requirements.txt
-uvicorn server:app --reload --port 8001
+python -m pip install -r requirements.txt
+python -m uvicorn server:app --reload --port 8001
 ```
 
 ### Frontend
+
 ```bash
 cd frontend
 yarn install
 yarn start
 ```
 
-### Environment Variables
+### Contracts
 
-Create `.env` files from templates:
+```bash
+cd contracts
+npm install
+npm run compile
+npm run test
+npm run deploy:fuji
+```
+
+### Environment Files
 
 ```bash
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
+cp contracts/.env.example contracts/.env
 ```
 
-Backend `.env`:
+## 📡 API Reference
 
-```
-MONGO_URL=mongodb+srv://<user>:<password>@cluster.mongodb.net/avaira
-PERMIT_SECRET=your_secret_key
-ADMIN_EMAILS=admin@example.com
-CORS_ORIGINS=http://localhost:3000
-ALLOWED_REDIRECT_ORIGINS=http://localhost:3000,https://avaira.xyz
-DEFAULT_POST_LOGIN_REDIRECT=http://localhost:3000/dashboard
-COOKIE_SECURE=false
-SESSION_MAX_AGE_SECONDS=604800
-
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_REDIRECT_URI=http://localhost:8001/api/auth/google/callback
-
-X_CLIENT_ID=your_x_client_id
-X_CLIENT_SECRET=your_x_client_secret
-X_REDIRECT_URI=http://localhost:8001/api/auth/x/callback
-```
-
-`ADMIN_EMAILS` controls who can access privileged protocol actions (freeze, slash, status updates, mission settlement). If it is not set, those admin operations are blocked by design.
-
-Google and X authentication now run directly through AVAIRA backend OAuth callbacks (`/api/auth/google/*`, `/api/auth/x/*`) with no Emergent dependency.
-
-Frontend `.env`:
-
-```
-REACT_APP_BACKEND_URL=http://localhost:8001
-WDS_SOCKET_PORT=443
-ENABLE_HEALTH_CHECK=false
-```
-
----
-
-## Security
-
-- EIP-712 domain separator includes `chainId` to prevent cross-chain replay attacks
-- Nonces are strictly monotonic per agent to prevent replay
-- Re-entrancy guards on all state-changing `ExecutionWallet` functions
-- `FreezeSlash` callable only by protocol-authorized addresses
-- Collateral withdrawal requires a cooldown period
-- Privileged protocol routes are admin-gated via `ADMIN_EMAILS`
-- Sensitive signing material is loaded from environment (`PERMIT_SECRET`) and should never be committed
-- The simulation lifecycle endpoint is admin-gated to prevent public abuse/data spam
-- Privileged admin actions are written to an audit log with actor and request metadata
-- Lightweight rate limiting protects auth session creation and admin action endpoints
-- Session tokens are hashed at rest in the database (no plaintext token persistence)
-
----
-
-## Network
-
-AVAIRA is deployed on **Avalanche (Fuji Testnet)** — Chain ID `43113`.
-
----
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/agents/register` | Register an agent |
+| GET | `/api/agents` | List agents |
+| POST | `/api/executions/request` | Submit execution request |
+| GET | `/api/executions` | List executions |
+| POST | `/api/freeze/{agent_id}` | Freeze agent |
+| POST | `/api/slash/{agent_id}` | Slash collateral |
+| GET | `/api/reputation/leaderboard` | Standard reputation leaderboard |
+| GET | `/api/contracts` | Contract metadata and addresses |
+| GET | `/api/sdk/docs` | SDK docs payload |
+| POST | `/api/agent/think` | Run local agent planning and validation |
+| POST | `/api/agent/simulate-full-lifecycle` | Run the full demo lifecycle judges can inspect |
+| GET | `/api/agent/leaderboard` | Return the top AI agents by Avaira Score |
 
 ## License
 
