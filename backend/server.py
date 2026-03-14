@@ -4,6 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ReturnDocument
+from pymongo.errors import ServerSelectionTimeoutError
 import os
 import logging
 import hashlib
@@ -25,6 +26,15 @@ from urllib.parse import urlencode, urlparse
 from web3 import Web3
 from eth_account import Account
 
+try:
+    from .agent_runtime import AvairaAgent, RuntimeRiskEnvelope
+    from .permit import generate_permit as generate_structured_permit, verify_permit as verify_structured_permit
+    from .chains import SUPPORTED_CHAINS, get_chain
+except ImportError:  # pragma: no cover
+    from agent_runtime import AvairaAgent, RuntimeRiskEnvelope
+    from permit import generate_permit as generate_structured_permit, verify_permit as verify_structured_permit
+    from chains import SUPPORTED_CHAINS, get_chain
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -37,9 +47,10 @@ def _get_required_env(name: str) -> str:
 
 mongo_url = _get_required_env("MONGO_URL")
 db_name = _get_required_env("DB_NAME")
-client = AsyncIOMotorClient(mongo_url)
+client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=3000)
 db = client[db_name]
 api_router = APIRouter(prefix="/api")
+DATABASE_READY = True
 
 # ─── PROTOCOL CONSTANTS ─────────────────────────────────────────
 PROTOCOL_FEE_RATE = 0.005  # 0.5%
@@ -63,6 +74,9 @@ SUBSCRIPTION_TIERS = {
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+if "localhost" in mongo_url.lower():
+    logger.warning("WARNING: Using local MongoDB. Switch to Atlas for production.")
 
 PERMIT_SECRET = _get_required_env("PERMIT_SECRET")
 ADMIN_EMAILS = {email.strip().lower() for email in os.environ.get("ADMIN_EMAILS", "").split(",") if email.strip()}
@@ -96,45 +110,108 @@ protocol_account = Account.from_key(PROTOCOL_PRIVATE_KEY) if PROTOCOL_PRIVATE_KE
 
 REGISTRY_ABI = [
     {
-        "name": "registerAgent",
+        "name": "registerFor",
         "type": "function",
         "stateMutability": "payable",
         "inputs": [
+            {"name": "agent", "type": "address"},
             {"name": "name", "type": "string"},
-            {"name": "walletAddress", "type": "address"},
             {
                 "name": "envelope",
                 "type": "tuple",
                 "components": [
                     {"name": "maxTxValue", "type": "uint256"},
-                    {"name": "maxDailyTxns", "type": "uint256"},
-                    {"name": "maxSlippage", "type": "uint256"},
+                    {"name": "maxSlippage", "type": "uint8"},
+                    {"name": "allowedActions", "type": "string"},
                 ],
             },
         ],
-        "outputs": [{"name": "agentId", "type": "bytes32"}],
-    },
-]
-
-FREEZE_SLASH_ABI = [
-    {
-        "name": "freezeAgent",
-        "type": "function",
-        "stateMutability": "nonpayable",
-        "inputs": [{"name": "agentId", "type": "bytes32"}, {"name": "reason", "type": "string"}],
         "outputs": [],
     },
     {
-        "name": "slashCollateral",
+        "name": "getAgent",
+        "type": "function",
+        "stateMutability": "view",
+        "inputs": [{"name": "agent", "type": "address"}],
+        "outputs": [
+            {
+                "name": "",
+                "type": "tuple",
+                "components": [
+                    {"name": "wallet", "type": "address"},
+                    {"name": "name", "type": "string"},
+                    {"name": "collateral", "type": "uint256"},
+                    {"name": "status", "type": "uint8"},
+                    {"name": "reputationScore", "type": "int256"},
+                    {"name": "registeredAt", "type": "uint256"},
+                    {"name": "nonce", "type": "uint256"},
+                    {
+                        "name": "envelope",
+                        "type": "tuple",
+                        "components": [
+                            {"name": "maxTxValue", "type": "uint256"},
+                            {"name": "maxSlippage", "type": "uint8"},
+                            {"name": "allowedActions", "type": "string"},
+                        ],
+                    },
+                ],
+            }
+        ],
+    },
+    {
+        "name": "freeze",
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "inputs": [{"name": "agent", "type": "address"}, {"name": "reason", "type": "string"}],
+        "outputs": [],
+    },
+    {
+        "name": "slash",
         "type": "function",
         "stateMutability": "nonpayable",
         "inputs": [
-            {"name": "agentId", "type": "bytes32"},
+            {"name": "agent", "type": "address"},
             {"name": "amount", "type": "uint256"},
             {"name": "reason", "type": "string"},
         ],
         "outputs": [{"name": "", "type": "uint256"}],
     },
+    {
+        "name": "updateReputation",
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {"name": "agent", "type": "address"},
+            {"name": "delta", "type": "int256"},
+            {"name": "reason", "type": "string"},
+        ],
+        "outputs": [],
+    },
+]
+
+EXECUTION_WALLET_ABI = [
+    {
+        "name": "execute",
+        "type": "function",
+        "stateMutability": "payable",
+        "inputs": [
+            {
+                "name": "permit",
+                "type": "tuple",
+                "components": [
+                    {"name": "agent", "type": "address"},
+                    {"name": "action", "type": "string"},
+                    {"name": "target", "type": "address"},
+                    {"name": "value", "type": "uint256"},
+                    {"name": "nonce", "type": "uint256"},
+                    {"name": "deadline", "type": "uint256"},
+                ],
+            },
+            {"name": "signature", "type": "bytes"},
+            {"name": "callData", "type": "bytes"},
+        ],
+        "outputs": [{"name": "result", "type": "bytes"}],
+    }
 ]
 
 
@@ -198,7 +275,13 @@ async def ensure_indexes():
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    await ensure_indexes()
+    global DATABASE_READY
+    try:
+        await ensure_indexes()
+        DATABASE_READY = True
+    except ServerSelectionTimeoutError as exc:
+        DATABASE_READY = False
+        logger.warning(f"WARNING: MongoDB unavailable. Starting in degraded mode. {exc}")
     yield
     client.close()
 
@@ -267,6 +350,14 @@ class MissionStake(BaseModel):
     underwriter_id: str
     amount: float
 
+
+class AgentThinkRequest(BaseModel):
+    agent_address: str
+    mission_goal: str
+    risk_envelope: RuntimeRiskEnvelope
+    market_context: Dict[str, Any] = Field(default_factory=dict)
+    history: List[Dict[str, Any]] = Field(default_factory=list)
+
 # ─── HELPER FUNCTIONS ────────────────────────────────────────────
 async def _next_permit_nonce(agent_id: str) -> int:
     nonce_doc = await db.permit_nonces.find_one_and_update(
@@ -278,46 +369,45 @@ async def _next_permit_nonce(agent_id: str) -> int:
     return int(nonce_doc.get("nonce", 1))
 
 
-async def generate_eip712_permit(agent_id: str, execution_id: str, action: str, value: float, chain_id: str) -> Dict:
-    nonce = await _next_permit_nonce(agent_id)
-    domain = {
-        "name": "AVAIRA_ExecutionWallet",
-        "version": "1",
-        "chainId": int(chain_id),
-        "verifyingContract": EXECUTION_WALLET_ADDRESS if EXECUTION_WALLET_ADDRESS else "0x0000000000000000000000000000000000000000"
-    }
-    message = {
-        "agentId": agent_id,
-        "executionId": execution_id,
-        "action": action,
-        "value": str(value),
-        "nonce": nonce,
-        "deadline": int(datetime.now(timezone.utc).timestamp()) + 300
-    }
-    payload = json.dumps({"domain": domain, "message": message}, sort_keys=True)
-    signature = hmac.new(PERMIT_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    return {
-        "domain": domain,
-        "message": message,
-        "signature": "0x" + signature,
-        "typedDataHash": "0x" + hashlib.sha256(payload.encode()).hexdigest(),
-        "signed_at": datetime.now(timezone.utc).isoformat()
-    }
-
-def verify_permit(permit: Dict) -> bool:
-    domain = permit.get("domain", {})
-    message = permit.get("message", {})
-    payload = json.dumps({"domain": domain, "message": message}, sort_keys=True)
-    expected_sig = "0x" + hmac.new(PERMIT_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    return permit.get("signature") == expected_sig
-
-
 def get_registry_contract():
+    if not AGENT_REGISTRY_ADDRESS:
+        raise RuntimeError("AGENT_REGISTRY_ADDRESS is not configured")
     return w3.eth.contract(address=Web3.to_checksum_address(AGENT_REGISTRY_ADDRESS), abi=REGISTRY_ABI)
 
 
-def get_freeze_slash_contract():
-    return w3.eth.contract(address=Web3.to_checksum_address(FREEZE_SLASH_ADDRESS), abi=FREEZE_SLASH_ABI)
+def get_execution_wallet_contract():
+    if not EXECUTION_WALLET_ADDRESS:
+        raise RuntimeError("EXECUTION_WALLET_ADDRESS is not configured")
+    return w3.eth.contract(address=Web3.to_checksum_address(EXECUTION_WALLET_ADDRESS), abi=EXECUTION_WALLET_ABI)
+
+
+def _normalize_bytes_hex(raw_data: str) -> bytes:
+    cleaned = (raw_data or "").strip()
+    if not cleaned or cleaned == "0x":
+        return b""
+    if cleaned.startswith("0x"):
+        cleaned = cleaned[2:]
+    if len(cleaned) % 2 != 0:
+        cleaned = "0" + cleaned
+    try:
+        return bytes.fromhex(cleaned)
+    except ValueError as exc:
+        raise HTTPException(400, "Execution data must be valid hex") from exc
+
+
+def _onchain_agent_nonce(agent_wallet: str) -> Optional[int]:
+    if not AGENT_REGISTRY_ADDRESS:
+        return None
+    try:
+        registry_contract = get_registry_contract()
+        agent_data = registry_contract.functions.getAgent(Web3.to_checksum_address(agent_wallet)).call()
+        wallet = agent_data[0]
+        if not wallet or int(wallet, 16) == 0:
+            return None
+        return int(agent_data[6])
+    except Exception as err:
+        logger.warning(f"Could not fetch on-chain agent nonce: {err}")
+        return None
 
 
 async def send_tx(contract_fn, value_wei: int = 0) -> str:
@@ -336,11 +426,109 @@ async def send_tx(contract_fn, value_wei: int = 0) -> str:
         "chainId": 43113,
     })
     signed = protocol_account.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+    raw_tx = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction", None)
+    if raw_tx is None:
+        raise RuntimeError("Signed transaction payload missing")
+    tx_hash = w3.eth.send_raw_transaction(raw_tx)
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
-    if receipt.status != 1:
+    if receipt["status"] != 1:
         raise RuntimeError(f"Transaction reverted: 0x{tx_hash.hex()}")
     return "0x" + tx_hash.hex()
+
+
+def _execution_failure_response(execution: Dict[str, Any], error_message: str, status_code: int) -> JSONResponse:
+    execution.pop("tx_hash", None)
+    execution["execution_failed"] = True
+    execution["error_message"] = error_message
+    return JSONResponse(status_code=status_code, content=execution)
+
+
+def _grade_from_score(score: float) -> str:
+    if score >= 90:
+        return "A+"
+    if score >= 80:
+        return "A"
+    if score >= 70:
+        return "B"
+    if score >= 60:
+        return "C"
+    return "D"
+
+
+def _normalize_score(agent: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not agent:
+        return {"score": 50, "grade": "C"}
+    if "avaira_score" in agent:
+        score = max(0, min(100, int(round(agent.get("avaira_score", 50)))))
+    else:
+        score = max(0, min(100, int(round(agent.get("reputation", INITIAL_REPUTATION) / 2))))
+    return {"score": score, "grade": agent.get("grade", _grade_from_score(score))}
+
+
+async def _ensure_ai_agent_record(body: AgentThinkRequest) -> Dict[str, Any]:
+    existing = await db.agents.find_one({"wallet_address": body.agent_address}, {"_id": 0})
+    timestamp = datetime.now(timezone.utc).isoformat()
+    if existing:
+        updates = {
+            "mission_intent": body.mission_goal,
+            "risk_envelope": body.risk_envelope.model_dump(),
+            "updated_at": timestamp,
+            "status": existing.get("status", "active"),
+        }
+        await db.agents.update_one({"wallet_address": body.agent_address}, {"$set": updates})
+        existing.update(updates)
+        return existing
+
+    agent = {
+        "id": str(uuid.uuid4()),
+        "name": f"AI Agent {body.agent_address[:6]}",
+        "wallet_address": body.agent_address,
+        "collateral_amount": 0.1,
+        "collateral_remaining": 0.1,
+        "mission_intent": body.mission_goal,
+        "risk_envelope": body.risk_envelope.model_dump(),
+        "status": "active",
+        "reputation": INITIAL_REPUTATION,
+        "avaira_score": 50,
+        "grade": "C",
+        "runtime_nonce": 0,
+        "total_executions": 0,
+        "successful_executions": 0,
+        "failed_executions": 0,
+        "registered_at": timestamp,
+        "chain_id": "43113",
+        "agent_type": "local-runtime",
+    }
+    await db.agents.insert_one(agent)
+    return agent
+
+
+async def _write_reputation_snapshot(agent: Dict[str, Any], new_score: int, reason: str):
+    previous = _normalize_score(agent)["score"]
+    grade = _grade_from_score(new_score)
+    await db.agents.update_one(
+        {"id": agent["id"]},
+        {
+            "$set": {
+                "avaira_score": new_score,
+                "grade": grade,
+                "reputation": min(200, max(0, new_score * 2)),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+    await db.reputation_history.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "agent_id": agent["id"],
+            "agent_name": agent.get("name", agent["wallet_address"]),
+            "old_score": previous,
+            "new_score": new_score,
+            "delta": new_score - previous,
+            "reason": reason,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
 
 def validate_risk_envelope(request_data: Dict, risk_envelope: Dict) -> Dict:
     violations = []
@@ -368,6 +556,19 @@ async def update_reputation(agent_id: str, delta: float, reason: str):
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     await db.reputation_history.insert_one(history_entry)
+
+    if AGENT_REGISTRY_ADDRESS and protocol_account and agent.get("wallet_address") and is_valid_evm_address(agent["wallet_address"]):
+        try:
+            registry_contract = get_registry_contract()
+            await send_tx(
+                registry_contract.functions.updateReputation(
+                    Web3.to_checksum_address(agent["wallet_address"]),
+                    int(round(delta)),
+                    reason,
+                )
+            )
+        except Exception as err:
+            logger.warning(f"On-chain reputation update failed: {err}")
 
 async def record_treasury_transaction(execution_id: str, total_fee: float):
     trust_pool = round(total_fee * TRUST_POOL_SHARE, 6)
@@ -709,37 +910,59 @@ async def register_agent(body: AgentCreate, request: Request, _user: Dict[str, A
     }
     await db.agents.insert_one(agent)
 
-    # Best-effort on-chain registration; fallback remains fully functional off-chain.
     if AGENT_REGISTRY_ADDRESS and protocol_account:
         try:
-            collateral_wei = w3.to_wei(body.collateral_amount, "ether")
+            registry_contract = get_registry_contract()
             envelope_tuple = (
                 w3.to_wei(body.risk_envelope.max_tx_value, "ether"),
-                body.risk_envelope.max_daily_txns,
-                int(body.risk_envelope.max_slippage * 10000),
+                min(100, max(0, int(round(body.risk_envelope.max_slippage * 100)))),
+                ",".join(body.risk_envelope.allowed_actions),
             )
-            registry_contract = get_registry_contract()
             on_chain_tx = await send_tx(
-                registry_contract.functions.registerAgent(
-                    body.name,
+                registry_contract.functions.registerFor(
                     Web3.to_checksum_address(body.wallet_address),
+                    body.name,
                     envelope_tuple,
                 ),
-                value_wei=collateral_wei,
+                value_wei=w3.to_wei(body.collateral_amount, "ether"),
             )
-            agent["on_chain_tx"] = on_chain_tx
             agent["on_chain_registered"] = True
+            agent["on_chain_tx"] = on_chain_tx
             await db.agents.update_one(
                 {"id": agent["id"]},
-                {"$set": {"on_chain_tx": on_chain_tx, "on_chain_registered": True}},
+                {"$set": {"on_chain_registered": True, "on_chain_tx": on_chain_tx}},
             )
-            logger.info(f"Agent registered on-chain: {on_chain_tx}")
         except Exception as err:
-            logger.warning(f"On-chain registration failed, proceeding off-chain only: {err}")
+            logger.warning(f"On-chain registration failed: {err}")
             agent["on_chain_registered"] = False
+            agent["on_chain_registration_reason"] = f"On-chain registration failed: {err}"
+            await db.agents.update_one(
+                {"id": agent["id"]},
+                {"$set": {"on_chain_registered": False, "on_chain_registration_reason": str(err)}},
+            )
+    else:
+        agent["on_chain_registered"] = False
+        agent["on_chain_registration_reason"] = "Contract address or protocol key missing"
 
     agent.pop("_id", None)
     return agent
+
+
+@api_router.get("/chains")
+async def list_supported_chains():
+    chains = []
+    for chain_id, config in SUPPORTED_CHAINS.items():
+        chains.append(
+            {
+                "chain_id": chain_id,
+                "name": config.name,
+                "key": config.key,
+                "rpc_url": config.rpc_url,
+                "explorer_url": config.explorer_url,
+                "contracts": config.contracts,
+            }
+        )
+    return chains
 
 @api_router.get("/agents")
 async def list_agents(status: Optional[str] = None, limit: int = Query(100, ge=1, le=500)):
@@ -776,6 +999,12 @@ async def create_execution_request(body: ExecutionRequestCreate):
         raise HTTPException(403, "Agent is frozen. Execution blocked.")
     if agent["status"] != "active":
         raise HTTPException(403, f"Agent status is '{agent['status']}'. Must be 'active'.")
+
+    try:
+        request_chain_id = int(body.chain_id)
+        chain_config = get_chain(request_chain_id)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(400, f"Unsupported chain ID: {body.chain_id}") from exc
 
     execution = {
         "id": str(uuid.uuid4()),
@@ -841,18 +1070,27 @@ async def create_execution_request(body: ExecutionRequestCreate):
     })
 
     # Step 3: Sign EIP-712 permit
-    permit = await generate_eip712_permit(body.agent_id, execution["id"], body.action, body.value, body.chain_id)
-    execution["permit"] = permit
+    on_chain_nonce = _onchain_agent_nonce(agent["wallet_address"])
+    permit_nonce = on_chain_nonce + 1 if on_chain_nonce is not None else await _next_permit_nonce(body.agent_id)
+    permit_bundle = generate_structured_permit(
+        agent["wallet_address"],
+        body.action,
+        body.target_address,
+        body.value,
+        permit_nonce,
+        int(body.chain_id),
+    )
+    execution["permit"] = permit_bundle
     execution["status"] = "permit_signed"
     execution["lifecycle"].append({
         "step": "permit_signed",
         "status": "completed",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "details": f"EIP-712 permit signed. Sig: {permit['signature'][:20]}..."
+        "details": f"EIP-712 permit signed. Sig: {permit_bundle['signature'][:20]}..."
     })
 
     # Step 4: Verify permit (simulated on-chain verification)
-    if verify_permit(permit):
+    if verify_structured_permit(permit_bundle["permit"], permit_bundle["signature"], agent["wallet_address"]):
         execution["status"] = "permit_verified"
         execution["lifecycle"].append({
             "step": "permit_verified",
@@ -873,40 +1111,72 @@ async def create_execution_request(body: ExecutionRequestCreate):
         return execution
 
     # Step 5: Execute transaction
+    onchain_supported = request_chain_id == 43113
+    can_attempt_onchain = bool(onchain_supported and protocol_account and EXECUTION_WALLET_ADDRESS and AGENT_REGISTRY_ADDRESS)
     try:
-        if not protocol_account:
-            raise RuntimeError("PROTOCOL_PRIVATE_KEY not set")
+        if not can_attempt_onchain:
+            if not onchain_supported:
+                raise RuntimeError(f"State-changing execution is only enabled on Avalanche Fuji. Requested chain: {chain_config.name}")
+            raise RuntimeError("ExecutionWallet on-chain integration is not configured")
 
-        value_wei = w3.to_wei(body.value, "ether")
-        nonce_val = w3.eth.get_transaction_count(protocol_account.address)
-        tx = {
-            "from": protocol_account.address,
-            "to": Web3.to_checksum_address(body.target_address),
-            "value": value_wei,
-            "gas": 21000,
-            "maxFeePerGas": w3.to_wei(30, "gwei"),
-            "maxPriorityFeePerGas": w3.to_wei(2, "gwei"),
-            "nonce": nonce_val,
-            "chainId": 43113,
-        }
-        signed = protocol_account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
-        real_tx_hash = "0x" + tx_hash.hex()
-        on_chain_status = "confirmed" if receipt.status == 1 else "reverted"
+        ew_contract = get_execution_wallet_contract()
+        permit_message = permit_bundle["permit"]
+        permit_tuple = (
+            Web3.to_checksum_address(permit_message["agent"]),
+            permit_message["action"],
+            Web3.to_checksum_address(permit_message["target"]),
+            int(permit_message["value"]),
+            int(permit_message["nonce"]),
+            int(permit_message["deadline"]),
+        )
+        signature_bytes = _normalize_bytes_hex(permit_bundle["signature"])
+        call_data_bytes = _normalize_bytes_hex(body.data)
+        real_tx_hash = await send_tx(
+            ew_contract.functions.execute(permit_tuple, signature_bytes, call_data_bytes),
+            value_wei=int(permit_message["value"]),
+        )
+        on_chain_status = "confirmed"
     except Exception as chain_err:
         logger.error(f"On-chain execution failed: {chain_err}")
-        real_tx_hash = "0x" + secrets.token_hex(32)
-        on_chain_status = "simulated"
+        on_chain_status = "unavailable" if not can_attempt_onchain else "failed"
+        error_message = str(chain_err)
 
-    execution["tx_hash"] = real_tx_hash
-    execution["status"] = "executed"
-    execution["lifecycle"].append({
-        "step": "transaction_executed",
-        "status": "completed",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "details": f"Tx: {real_tx_hash} | Chain: {body.chain_id} | Status: {on_chain_status} | Snowtrace: https://testnet.snowtrace.io/tx/{real_tx_hash}"
-    })
+    if on_chain_status == "confirmed":
+        execution["tx_hash"] = real_tx_hash
+        execution["lifecycle"].append({
+            "step": "transaction_executed",
+            "status": "completed",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "details": f"Tx: {real_tx_hash} | Chain: {body.chain_id} | Status: {on_chain_status} | Snowtrace: https://testnet.snowtrace.io/tx/{real_tx_hash}"
+        })
+    else:
+        execution["lifecycle"].append({
+            "step": "transaction_executed",
+            "status": "failed",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "details": f"Chain: {body.chain_id} | Status: {on_chain_status} | Error: {error_message}"
+        })
+
+    if not onchain_supported:
+        execution["lifecycle"].append({
+            "step": "cross_chain_guard",
+            "status": "completed",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "details": f"Execution attempted on {chain_config.name}. Only Avalanche Fuji is enabled for state-changing calls in v1.",
+        })
+
+    if on_chain_status != "confirmed":
+        execution["status"] = "execution_failed"
+        execution["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.executions.insert_one(execution)
+        execution.pop("_id", None)
+        await update_reputation(body.agent_id, -REP_FAILURE_PENALTY, "Execution failed")
+        await db.agents.update_one({"id": body.agent_id}, {"$inc": {"total_executions": 1, "failed_executions": 1}})
+        return _execution_failure_response(
+            execution,
+            error_message,
+            503 if on_chain_status == "unavailable" else 502,
+        )
 
     # Step 6: Deduct fee
     fee = round(body.value * PROTOCOL_FEE_RATE, 6)
@@ -970,12 +1240,11 @@ async def freeze_agent(agent_id: str, body: FreezeRequest, request: Request, adm
     }
     await db.freeze_events.insert_one(event)
 
-    if FREEZE_SLASH_ADDRESS and protocol_account:
+    if AGENT_REGISTRY_ADDRESS and protocol_account:
         try:
-            agent_id_bytes = bytes.fromhex(agent_id.replace("-", "").ljust(64, "0")[:64])
-            freeze_contract = get_freeze_slash_contract()
+            registry_contract = get_registry_contract()
             on_chain_tx = await send_tx(
-                freeze_contract.functions.freezeAgent(agent_id_bytes, body.reason)
+                registry_contract.functions.freeze(Web3.to_checksum_address(agent["wallet_address"]), body.reason)
             )
             await db.freeze_events.update_one(
                 {"id": event["id"]},
@@ -1015,6 +1284,25 @@ async def slash_agent(agent_id: str, body: SlashRequest, request: Request, admin
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     await db.freeze_events.insert_one(event)
+
+    if AGENT_REGISTRY_ADDRESS and protocol_account:
+        try:
+            registry_contract = get_registry_contract()
+            on_chain_tx = await send_tx(
+                registry_contract.functions.slash(
+                    Web3.to_checksum_address(agent["wallet_address"]),
+                    w3.to_wei(slash_amount, "ether"),
+                    body.reason,
+                )
+            )
+            await db.freeze_events.update_one(
+                {"id": event["id"]},
+                {"$set": {"on_chain_tx": on_chain_tx}},
+            )
+            event["on_chain_tx"] = on_chain_tx
+        except Exception as err:
+            logger.warning(f"On-chain slash failed: {err}")
+
     await update_reputation(agent_id, -REP_SLASH_PENALTY, f"Slashed: {body.reason}")
     await record_admin_audit("agent_slash", admin_user, request, {"agent_id": agent_id, "reason": body.reason, "amount": slash_amount})
     event.pop("_id", None)
@@ -1296,7 +1584,7 @@ async def get_contract_architecture():
 
 # ─── SIMULATION ENDPOINT ────────────────────────────────────────
 @api_router.post("/simulate/lifecycle")
-async def simulate_full_lifecycle(request: Request, admin_user: Dict[str, Any] = Depends(require_admin_user)):
+async def simulate_protocol_lifecycle(request: Request, admin_user: Dict[str, Any] = Depends(require_admin_user)):
     """Simulates the complete AVAIRA execution lifecycle end-to-end."""
     steps = []
 
@@ -1589,12 +1877,236 @@ async def get_sdk_docs():
         "quick_start": "import { AvairaSDK } from '@avaira/sdk';\n\nconst avaira = new AvairaSDK({\n  apiKey: 'your-api-key',\n  network: 'fuji', // or 'mainnet'\n  chainId: 43113\n});\n\n// Register agent\nconst agent = await avaira.register(wallet, config);\n\n// Declare intent\nconst mission = await avaira.declareIntent(plan);\n\n// Execute (monitored by AVAIRA)\nconst result = await avaira.execute(action);\n\n// Settle\nconst settlement = await avaira.settle(mission.id);"
     }
 
+
+@api_router.post("/agent/think")
+async def agent_think(body: AgentThinkRequest):
+    if not is_valid_evm_address(body.agent_address):
+        raise HTTPException(400, "Invalid agent wallet address")
+
+    agent = await _ensure_ai_agent_record(body)
+    runtime = AvairaAgent(body.agent_address, body.risk_envelope, body.mission_goal)
+    try:
+        intent = await runtime.think(body.market_context, body.history)
+    except Exception as exc:
+        raise HTTPException(502, f"Agent runtime failed: {exc}") from exc
+
+    validation = runtime.validate(intent)
+    score_payload = _normalize_score(agent)
+    execution = {
+        "id": str(uuid.uuid4()),
+        "agent_id": agent["id"],
+        "agent_name": agent["name"],
+        "action": intent.action,
+        "target_address": intent.target,
+        "value": intent.value_avax,
+        "status": "agent_approved" if validation["valid"] else "agent_rejected",
+        "reason": validation["reason"],
+        "intent": intent.model_dump(),
+        "source": "agent_think",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.executions.insert_one(execution)
+    return {
+        "status": "approved" if validation["valid"] else "rejected",
+        "intent": intent.model_dump(),
+        "reason": validation["reason"],
+        "avaira_score": score_payload,
+    }
+
+
+@api_router.post("/agent/simulate-full-lifecycle")
+async def simulate_full_lifecycle(body: AgentThinkRequest):
+    if not is_valid_evm_address(body.agent_address):
+        raise HTTPException(400, "Invalid agent wallet address")
+
+    agent = await _ensure_ai_agent_record(body)
+    runtime = AvairaAgent(body.agent_address, body.risk_envelope, body.mission_goal)
+    lifecycle = []
+
+    lifecycle.append({
+        "stage": 1,
+        "name": "register",
+        "status": "completed",
+        "details": {
+            "agent_id": agent["id"],
+            "wallet_address": agent["wallet_address"],
+            "risk_envelope": agent["risk_envelope"],
+        },
+    })
+
+    intent = await runtime.think(body.market_context, body.history)
+    lifecycle.append({"stage": 2, "name": "think", "status": "completed", "details": intent.model_dump()})
+
+    validation = runtime.validate(intent)
+    lifecycle.append({"stage": 3, "name": "validate", "status": "completed" if validation["valid"] else "failed", "details": validation})
+
+    permit_bundle = None
+    tx_hash = None
+    final_status = "approved"
+    score_before = _normalize_score(agent)["score"]
+
+    if validation["valid"]:
+        nonce = int(agent.get("runtime_nonce", 0)) + 1
+        permit_bundle = generate_structured_permit(body.agent_address, intent.action, intent.target, intent.value_avax, nonce)
+        permit_ok = verify_structured_permit(permit_bundle["permit"], permit_bundle["signature"], body.agent_address)
+        lifecycle.append({
+            "stage": 4,
+            "name": "permit",
+            "status": "completed" if permit_ok else "failed",
+            "details": {"signature": permit_bundle["signature"], "deadline": permit_bundle["deadline"], "verified": permit_ok},
+        })
+
+        if not permit_ok:
+            final_status = "rejected"
+            new_score = max(0, score_before - 5)
+            await db.agents.update_one(
+                {"id": agent["id"]},
+                {"$inc": {"total_executions": 1, "failed_executions": 1}},
+            )
+            await _write_reputation_snapshot(agent, new_score, "permit_verification_failed")
+            lifecycle.append({"stage": 5, "name": "execute", "status": "skipped", "details": {"reason": "permit verification failed"}})
+            lifecycle.append({"stage": 6, "name": "score_update", "status": "completed", "details": {"before": score_before, "after": new_score, "grade": _grade_from_score(new_score)}})
+            lifecycle.append({"stage": 7, "name": "final_state", "status": "completed", "details": {"status": "rejected"}})
+            await db.executions.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "agent_id": agent["id"],
+                    "agent_name": agent["name"],
+                    "action": intent.action,
+                    "target_address": intent.target,
+                    "value": intent.value_avax,
+                    "permit": permit_bundle,
+                    "tx_hash": None,
+                    "status": final_status,
+                    "source": "simulate_full_lifecycle",
+                    "lifecycle": lifecycle,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            latest = await db.agents.find_one({"id": agent["id"]}, {"_id": 0})
+            return {
+                "status": final_status,
+                "agent": latest,
+                "intent": intent.model_dump(),
+                "lifecycle": lifecycle,
+                "permit": permit_bundle,
+                "avaira_score": _normalize_score(latest),
+            }
+
+        tx_hash = "0x" + hashlib.sha256(f"{body.agent_address}:{nonce}:{intent.action}:{intent.target}:{intent.value_avax}".encode()).hexdigest()
+        lifecycle.append({
+            "stage": 5,
+            "name": "execute",
+            "status": "completed",
+            "details": {"tx_hash": tx_hash, "network": "fuji", "explorer": f"https://testnet.snowtrace.io/tx/{tx_hash}"},
+        })
+
+        fee = round(intent.value_avax * PROTOCOL_FEE_RATE, 6)
+        await record_treasury_transaction(tx_hash, fee)
+        lifecycle.append({"stage": 6, "name": "fee_deducted", "status": "completed", "details": {"fee_avax": fee}})
+
+        new_score = min(100, score_before + 8)
+        await db.agents.update_one(
+            {"id": agent["id"]},
+            {"$set": {"runtime_nonce": nonce, "status": "active"}, "$inc": {"total_executions": 1, "successful_executions": 1}},
+        )
+        await _write_reputation_snapshot(agent, new_score, "full_lifecycle_success")
+        lifecycle.append({"stage": 7, "name": "score_update", "status": "completed", "details": {"before": score_before, "after": new_score, "grade": _grade_from_score(new_score)}})
+        lifecycle.append({"stage": 8, "name": "freeze_check", "status": "completed", "details": {"frozen": False, "reason": "no deviation detected"}})
+    else:
+        slash_amount = round(float(agent.get("collateral_remaining", 0.1)) * SLASH_RATE, 6)
+        final_status = "rejected"
+        await db.agents.update_one(
+            {"id": agent["id"]},
+            {
+                "$set": {"status": "frozen", "collateral_remaining": max(0.0, float(agent.get("collateral_remaining", 0.1)) - slash_amount)},
+                "$inc": {"total_executions": 1, "failed_executions": 1},
+            },
+        )
+        await db.freeze_events.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "agent_id": agent["id"],
+                "agent_name": agent["name"],
+                "type": "freeze",
+                "reason": validation["reason"],
+                "collateral_slashed": slash_amount,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        new_score = max(0, score_before - 15)
+        await _write_reputation_snapshot(agent, new_score, "full_lifecycle_rejection")
+        lifecycle.append({"stage": 4, "name": "permit", "status": "skipped", "details": {"reason": validation["reason"]}})
+        lifecycle.append({"stage": 5, "name": "execute", "status": "skipped", "details": {"reason": "execution blocked by risk envelope"}})
+        lifecycle.append({"stage": 6, "name": "score_update", "status": "completed", "details": {"before": score_before, "after": new_score, "grade": _grade_from_score(new_score)}})
+        lifecycle.append({"stage": 7, "name": "freeze", "status": "completed", "details": {"slash_amount": slash_amount, "reason": validation["reason"]}})
+        lifecycle.append({"stage": 8, "name": "final_state", "status": "completed", "details": {"status": "frozen"}})
+
+    await db.executions.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "agent_id": agent["id"],
+            "agent_name": agent["name"],
+            "action": intent.action,
+            "target_address": intent.target,
+            "value": intent.value_avax,
+            "permit": permit_bundle,
+            "tx_hash": tx_hash,
+            "status": final_status,
+            "source": "simulate_full_lifecycle",
+            "lifecycle": lifecycle,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    latest = await db.agents.find_one({"id": agent["id"]}, {"_id": 0})
+    return {
+        "status": final_status,
+        "agent": latest,
+        "intent": intent.model_dump(),
+        "lifecycle": lifecycle,
+        "permit": permit_bundle,
+        "avaira_score": _normalize_score(latest),
+    }
+
+
+@api_router.get("/agent/leaderboard")
+async def agent_leaderboard():
+    agents = await db.agents.find({"wallet_address": {"$exists": True}}, {"_id": 0}).sort("avaira_score", -1).to_list(10)
+    leaderboard = []
+    for agent in agents:
+        score_payload = _normalize_score(agent)
+        leaderboard.append(
+            {
+                "agent_id": agent.get("id"),
+                "wallet_address": agent.get("wallet_address"),
+                "name": agent.get("name"),
+                "status": agent.get("status", "pending"),
+                "collateral": agent.get("collateral_remaining", agent.get("collateral_amount", 0)),
+                "avaira_score": score_payload["score"],
+                "grade": score_payload["grade"],
+                "successful_executions": agent.get("successful_executions", 0),
+                "total_executions": agent.get("total_executions", 0),
+            }
+        )
+    return leaderboard
+
 # ─── ROOT ────────────────────────────────────────────────────────
 @api_router.get("/")
 async def root():
     return {"message": "AVAIRA Protocol API v1.0", "status": "operational"}
 
 app.include_router(api_router)
+
+
+@app.middleware("http")
+async def database_guard(request: Request, call_next):
+    if not DATABASE_READY and request.url.path.startswith("/api") and request.url.path != "/api/":
+        return JSONResponse({"detail": "Database unavailable"}, status_code=503)
+    return await call_next(request)
 
 cors_origins = [origin.strip() for origin in os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',') if origin.strip()]
 allow_credentials = '*' not in cors_origins
