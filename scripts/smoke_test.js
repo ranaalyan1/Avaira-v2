@@ -151,9 +151,11 @@ async function main() {
   loadEnvFile(path.join(BACKEND_DIR, ".env"));
   loadEnvFile(path.join(ROOT_DIR, ".env"));
 
-  const requiredVars = ["DB_NAME", "FUJI_RPC_URL", "PROTOCOL_PRIVATE_KEY", "PERMIT_SECRET"];
-  for (const name of requiredVars) {
-    requireEnv(name);
+  const requiredVars = ["FUJI_RPC_URL", "PROTOCOL_PRIVATE_KEY", "PERMIT_SECRET"];
+  const missingVars = requiredVars.filter((name) => !process.env[name]);
+  if (missingVars.length > 0) {
+    console.log(`[SKIP] Smoke test: live-chain secrets not configured (${missingVars.join(", ")}); skipping live on-chain smoke test.`);
+    process.exit(0);
   }
 
   const { mongoUrl, dbName, mongoServer, detail: mongoDetail } = await resolveMongoConfig();
