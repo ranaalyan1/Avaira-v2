@@ -1,9 +1,16 @@
-const fs = require("fs");
-const path = require("path");
-const { spawn, execFileSync } = require("child_process");
-const { setTimeout: delay } = require("timers/promises");
-const { ethers } = require("../contracts/node_modules/ethers");
+import fs from "node:fs";
+import path from "node:path";
+import { spawn, execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 
+const require = createRequire(import.meta.url);
+const { ethers } = require("../contracts/node_modules/ethers");
+const { MongoMemoryServer } = require("../contracts/node_modules/mongodb-memory-server-core");
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.join(__dirname, "..");
 const BACKEND_DIR = path.join(ROOT_DIR, "backend");
 const DEPLOYMENT_PATH = path.join(ROOT_DIR, "deployments", "fuji.json");
@@ -61,6 +68,63 @@ function runPythonJson(code, extraEnv = {}) {
   return output ? JSON.parse(output) : null;
 }
 
+function canPingMongo(mongoUrl) {
+  try {
+    const ping = runPythonJson(
+      "import json, os\nfrom pymongo import MongoClient\nclient = MongoClient(os.environ['MONGO_URL'], serverSelectionTimeoutMS=5000)\nping = client.admin.command('ping')\nprint(json.dumps({'ok': ping.get('ok', 0)}))",
+      { MONGO_URL: mongoUrl },
+    );
+    return ping?.ok === 1;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isLocalMongoUrl(mongoUrl) {
+  return /^mongodb:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(mongoUrl);
+}
+
+async function resolveMongoConfig() {
+  const dbName = process.env.DB_NAME || "avaira";
+  const configuredUrl = process.env.MONGO_URL?.trim();
+
+  if (configuredUrl && canPingMongo(configuredUrl)) {
+    return {
+      dbName,
+      mongoUrl: configuredUrl,
+      mongoServer: null,
+      detail: "Connected and ping returned ok=1",
+    };
+  }
+
+  if (configuredUrl && !isLocalMongoUrl(configuredUrl)) {
+    throw new Error(`Configured MONGO_URL is unreachable: ${configuredUrl}`);
+  }
+
+  const mongoCacheDir = path.join(ROOT_DIR, ".tmp-mongo");
+  fs.mkdirSync(mongoCacheDir, { recursive: true });
+  process.env.MONGOMS_DOWNLOAD_DIR = process.env.MONGOMS_DOWNLOAD_DIR || mongoCacheDir;
+
+  const mongoServer = await MongoMemoryServer.create({
+    instance: { dbName },
+    binary: { downloadDir: mongoCacheDir },
+  });
+  const mongoUrl = mongoServer.getUri(dbName);
+
+  if (!canPingMongo(mongoUrl)) {
+    await mongoServer.stop();
+    throw new Error("Ephemeral MongoDB started but failed ping check");
+  }
+
+  process.env.MONGO_URL = mongoUrl;
+  return {
+    dbName,
+    mongoUrl,
+    mongoServer,
+    detail: `Started ephemeral MongoDB at ${mongoUrl}`,
+  };
+}
+
 function isRealTxHash(txHash) {
   return typeof txHash === "string" && /^0x[a-fA-F0-9]{64}$/.test(txHash);
 }
@@ -87,10 +151,12 @@ async function main() {
   loadEnvFile(path.join(BACKEND_DIR, ".env"));
   loadEnvFile(path.join(ROOT_DIR, ".env"));
 
-  const requiredVars = ["MONGO_URL", "DB_NAME", "FUJI_RPC_URL", "PROTOCOL_PRIVATE_KEY", "PERMIT_SECRET"];
+  const requiredVars = ["DB_NAME", "FUJI_RPC_URL", "PROTOCOL_PRIVATE_KEY", "PERMIT_SECRET"];
   for (const name of requiredVars) {
     requireEnv(name);
   }
+
+  const { mongoUrl, dbName, mongoServer, detail: mongoDetail } = await resolveMongoConfig();
 
   if (!fs.existsSync(DEPLOYMENT_PATH)) {
     throw new Error(`Missing deployment file: ${DEPLOYMENT_PATH}`);
@@ -106,7 +172,9 @@ async function main() {
 
   const provider = new ethers.JsonRpcProvider(process.env.FUJI_RPC_URL);
   const protocolWallet = new ethers.Wallet(process.env.PROTOCOL_PRIVATE_KEY, provider);
-  const agentWallet = ethers.Wallet.createRandom();
+  const executionValue = Number(process.env.SMOKE_EXECUTION_VALUE || "0.01");
+  const configuredAgentWallet = process.env.SMOKE_AGENT_WALLET?.trim();
+  const agentAddress = configuredAgentWallet || ethers.Wallet.createRandom().address;
   const uniqueSuffix = Date.now();
   const agentName = `SmokeAgent-${uniqueSuffix}`;
   const agentId = `smoke-${uniqueSuffix}`;
@@ -124,6 +192,8 @@ async function main() {
 
   const backendEnv = {
     ...process.env,
+    MONGO_URL: mongoUrl,
+    DB_NAME: dbName,
     AGENT_REGISTRY_ADDRESS: deployment.AgentRegistry,
     EXECUTION_WALLET_ADDRESS: deployment.ExecutionWallet,
     FREEZE_SLASH_ADDRESS: deployment.FreezeSlash,
@@ -159,16 +229,9 @@ async function main() {
     }
     logResult("Fuji RPC", true, `Connected to chainId ${network.chainId}`);
 
-    const mongoPing = runPythonJson(
-      "import json, os\nfrom pymongo import MongoClient\nclient = MongoClient(os.environ['MONGO_URL'], serverSelectionTimeoutMS=5000)\nping = client.admin.command('ping')\nprint(json.dumps({'ok': ping.get('ok', 0)}))",
-      backendEnv,
-    );
-    if (mongoPing?.ok !== 1) {
-      throw new Error("Mongo ping failed");
-    }
-    logResult("MongoDB", true, "Connected and ping returned ok=1");
+    logResult("MongoDB", true, mongoDetail);
 
-    const beforeScore = await reputationEngine.computeAvairaScore(agentWallet.address);
+    const beforeScore = await reputationEngine.computeAvairaScore(agentAddress);
     logResult("Reputation baseline", true, `Score ${beforeScore[0].toString()} / Grade ${beforeScore[1]}`);
 
     const envelope = {
@@ -176,14 +239,19 @@ async function main() {
       maxSlippage: 5,
       allowedActions: "transfer,swap,stake",
     };
-    const registrationTx = await registry.registerFor(agentWallet.address, agentName, envelope, {
-      value: ethers.parseEther("0.1"),
-    });
-    const registrationReceipt = await registrationTx.wait();
-    if (registrationReceipt.status !== 1n) {
-      throw new Error("Agent registration transaction reverted");
+    const existingAgent = await registry.getAgent(agentAddress);
+    if (existingAgent.wallet === ethers.ZeroAddress) {
+      const registrationTx = await registry.registerFor(agentAddress, agentName, envelope, {
+        value: ethers.parseEther("0.1"),
+      });
+      const registrationReceipt = await registrationTx.wait();
+      if (Number(registrationReceipt.status) !== 1) {
+        throw new Error("Agent registration transaction reverted");
+      }
+      logResult("Agent registration", true, `Registered ${agentAddress} with tx ${registrationReceipt.hash}`);
+    } else {
+      logResult("Agent registration", true, `Reused existing registered agent ${agentAddress}`);
     }
-    logResult("Agent registration", true, `Registered ${agentWallet.address} with tx ${registrationReceipt.hash}`);
 
     runPythonJson(
       "import json, os\nfrom datetime import datetime, timezone\nfrom pymongo import MongoClient\nclient = MongoClient(os.environ['MONGO_URL'])\ndb = client[os.environ['DB_NAME']]\nagent = {\n  'id': os.environ['SMOKE_AGENT_ID'],\n  'name': os.environ['SMOKE_AGENT_NAME'],\n  'wallet_address': os.environ['SMOKE_AGENT_WALLET'],\n  'collateral_amount': 0.1,\n  'collateral_remaining': 0.1,\n  'mission_intent': 'Live Fuji smoke test',\n  'risk_envelope': {'max_tx_value': 1.0, 'max_daily_txns': 10, 'allowed_actions': ['transfer','swap','stake'], 'max_slippage': 0.05},\n  'status': 'active',\n  'reputation': 100,\n  'total_executions': 0,\n  'successful_executions': 0,\n  'failed_executions': 0,\n  'registered_at': datetime.now(timezone.utc).isoformat(),\n  'chain_id': '43113'\n}\ndb.agents.replace_one({'id': agent['id']}, agent, upsert=True)\nprint(json.dumps({'seeded': True}))",
@@ -191,7 +259,7 @@ async function main() {
         ...backendEnv,
         SMOKE_AGENT_ID: agentId,
         SMOKE_AGENT_NAME: agentName,
-        SMOKE_AGENT_WALLET: agentWallet.address,
+        SMOKE_AGENT_WALLET: agentAddress,
       },
     );
     logResult("Mongo seed", true, `Inserted backend agent record ${agentId}`);
@@ -206,7 +274,7 @@ async function main() {
         agent_id: agentId,
         action: "transfer",
         target_address: protocolWallet.address,
-        value: 0.1,
+        value: executionValue,
         data: "0x",
         chain_id: "43113",
       }),
@@ -226,7 +294,7 @@ async function main() {
     }
     logResult("Execution receipt", true, `Confirmed on-chain in block ${executionReceipt.blockNumber}`);
 
-    const afterScore = await reputationEngine.computeAvairaScore(agentWallet.address);
+    const afterScore = await reputationEngine.computeAvairaScore(agentAddress);
     if (afterScore[0] <= beforeScore[0]) {
       throw new Error(`Avaira Score did not increase: before=${beforeScore[0].toString()} after=${afterScore[0].toString()}`);
     }
@@ -240,6 +308,9 @@ async function main() {
       await delay(1000);
     } catch (error) {
       // ignore cleanup wait errors
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
     }
   }
 
