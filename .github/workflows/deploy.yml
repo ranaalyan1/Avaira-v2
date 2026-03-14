@@ -59,7 +59,7 @@ jobs:
       - contract-tests
     env:
       MONGO_URL: ${{ secrets.MONGO_URL }}
-      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_NAME: ${{ secrets.DB_NAME || 'avaira' }}
       FUJI_RPC_URL: ${{ secrets.FUJI_RPC_URL }}
       PROTOCOL_PRIVATE_KEY: ${{ secrets.PROTOCOL_PRIVATE_KEY }}
       PERMIT_SECRET: ${{ secrets.PERMIT_SECRET }}
