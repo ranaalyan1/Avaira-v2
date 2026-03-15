@@ -121,10 +121,12 @@ export default function SmartContracts() {
   );
 
   return (
-    <div className="animate-slide-in" data-testid="smart-contracts-page">
-      <div className="mb-6">
-        <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">Smart Contracts</h1>
-        <p className="font-mono text-xs text-avaira-muted mt-1">AVALANCHE FUJI C-CHAIN ARCHITECTURE</p>
+    <div className="page-shell animate-slide-in" data-testid="smart-contracts-page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title font-heading font-bold text-foreground uppercase tracking-tight">Smart Contracts</h1>
+          <p className="page-subtitle font-mono text-xs text-avaira-muted mt-1">AVALANCHE FUJI C-CHAIN ARCHITECTURE</p>
+        </div>
       </div>
 
       {/* Contracts */}

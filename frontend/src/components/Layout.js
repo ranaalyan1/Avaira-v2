@@ -15,11 +15,24 @@ const NAV_ITEMS = [
   { path: "/contracts", label: "CONTRACTS", icon: Code },
 ];
 
+const PAGE_META = {
+  "/dashboard": "Protocol telemetry and live state",
+  "/agents": "Registration, risk envelopes, and status control",
+  "/executions": "Lifecycle traces and permit verification",
+  "/underwriters": "Mission markets and underwriting coverage",
+  "/freeze": "Policy enforcement, freeze and slash actions",
+  "/treasury": "Fee capture, split accounting, and treasury flow",
+  "/reputation": "Score engine, rank movement, and trust data",
+  "/sdk": "Developer integration docs and references",
+  "/contracts": "On-chain architecture and contract interfaces",
+};
+
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const currentNav = NAV_ITEMS.find((item) => item.path === location.pathname);
 
   const handleLogout = async () => {
     await logout();
@@ -44,9 +57,9 @@ export default function Layout() {
       >
         {/* Logo */}
         <div className="p-5 border-b border-avaira-border flex items-center gap-3">
-          <img src="/logo.png" alt="AVAIRA" className="w-8 h-8" data-testid="sidebar-logo" />
+          <img src="/logo.png" alt="AVAIRA" className="w-10 h-10" data-testid="sidebar-logo" />
           <div>
-            <h1 className="font-heading font-bold text-xl tracking-tight text-avaira-primary uppercase" data-testid="app-logo">
+            <h1 className="font-heading font-bold text-2xl tracking-tight text-avaira-primary uppercase" data-testid="app-logo">
               AVAIRA
             </h1>
             <p className="font-mono text-[8px] text-avaira-muted tracking-widest">EXECUTION CONTROL</p>
@@ -109,12 +122,27 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-56 min-h-screen" data-testid="main-content">
-        <div className="p-6 md:p-8">
-          <Outlet />
+      <main className="app-main-surface flex-1 lg:ml-56 min-h-screen" data-testid="main-content">
+        <div className="app-main-container">
+          <header className="app-topbar px-4 sm:px-6 md:px-8 py-3 mt-16 lg:mt-0 pl-16 sm:pl-6 md:pl-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+              <p className="font-heading font-bold text-sm text-foreground uppercase tracking-tight">
+                {currentNav?.label || "CONTROL PANEL"}
+              </p>
+              <p className="font-mono text-[10px] text-avaira-dim uppercase tracking-wider">
+                {PAGE_META[location.pathname] || "Execution control operations"}
+              </p>
+            </div>
+          </header>
+          <div className="p-4 sm:p-6 md:p-8">
+            <Outlet />
+          </div>
         </div>
         <footer className="px-6 md:px-8 py-4 border-t border-avaira-border">
-          <p className="font-mono text-[10px] text-avaira-dim">AVAIRA Protocol | Avalanche Fuji | v1</p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="font-mono text-[10px] text-avaira-dim">AVAIRA Protocol | Fuji Testnet | v1</p>
+            <p className="font-mono text-[10px] text-avaira-dim">Realtime enforcement and insured settlement</p>
+          </div>
         </footer>
       </main>
 

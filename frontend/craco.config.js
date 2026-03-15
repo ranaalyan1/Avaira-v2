@@ -61,6 +61,28 @@ let webpackConfig = {
 };
 
 webpackConfig.devServer = (devServerConfig) => {
+  // Normalize deprecated middleware hooks to setupMiddlewares so webpack-dev-server
+  // does not emit onBeforeSetupMiddleware/onAfterSetupMiddleware warnings.
+  const beforeHook = devServerConfig.onBeforeSetupMiddleware;
+  const afterHook = devServerConfig.onAfterSetupMiddleware;
+  if (beforeHook || afterHook) {
+    const originalSetupMiddlewares = devServerConfig.setupMiddlewares;
+    devServerConfig.setupMiddlewares = (middlewares, devServer) => {
+      if (beforeHook) {
+        beforeHook(devServer);
+      }
+      if (originalSetupMiddlewares) {
+        middlewares = originalSetupMiddlewares(middlewares, devServer);
+      }
+      if (afterHook) {
+        afterHook(devServer);
+      }
+      return middlewares;
+    };
+    delete devServerConfig.onBeforeSetupMiddleware;
+    delete devServerConfig.onAfterSetupMiddleware;
+  }
+
   // Add health check endpoints if enabled
   if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
     const originalSetupMiddlewares = devServerConfig.setupMiddlewares;

@@ -15,20 +15,20 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-avaira-bg flex items-center justify-center px-6 animate-slide-in" data-testid="login-page">
+    <div className="min-h-screen bg-avaira-bg flex items-start sm:items-center justify-center px-4 sm:px-6 py-10 sm:py-14 animate-slide-in" data-testid="login-page">
       {/* Grid bg */}
       <div className="fixed inset-0 -z-10" style={{ backgroundImage: 'linear-gradient(rgba(232,68,68,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(232,68,68,0.02) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
 
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <img src="/logo.png" alt="AVAIRA" className="w-20 h-20 mx-auto mb-4" data-testid="login-logo" />
-          <h1 className="font-heading font-bold text-3xl text-foreground uppercase tracking-tight">AVAIRA</h1>
+        <div className="text-center mb-7 sm:mb-8">
+          <img src="/logo.png" alt="AVAIRA" className="w-24 h-24 sm:w-28 sm:h-28 mx-auto mb-4" data-testid="login-logo" />
+          <h1 className="font-heading font-bold text-3xl sm:text-4xl text-foreground uppercase tracking-tight">AVAIRA</h1>
           <p className="font-mono text-[10px] text-avaira-muted tracking-[0.3em] mt-1">EXECUTION CONTROL PROTOCOL</p>
         </div>
 
         {/* Login Card */}
-        <div className="cyber-card corner-cut p-6" data-testid="login-card">
+        <div className="cyber-card corner-cut p-5 sm:p-6" data-testid="login-card">
           <p className="font-heading font-semibold text-sm text-foreground uppercase tracking-wider text-center mb-6">
             Sign in to access the protocol
           </p>

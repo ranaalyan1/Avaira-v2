@@ -12,8 +12,8 @@ module.exports = {
             colors: {
                 avaira: {
                     bg: '#050505',
-                    card: '#0A0A0A',
-                    surface: '#121212',
+                    card: '#111111',
+                    surface: '#181818',
                     primary: '#E84444',
                     red: '#FF003C',
                     purple: '#7000FF',
@@ -22,9 +22,9 @@ module.exports = {
                     redAlert: '#FF003C',
                     danger: '#FF003C',
                     redLegacy: '#FF003C',
-                    border: '#333333',
-                    muted: '#A8A8A8',
-                    dim: '#707070',
+                    border: '#3F3F3F',
+                    muted: '#CBCBCB',
+                    dim: '#A2A2A2',
                     data: '#00F0FF',
                 },
                 background: 'hsl(var(--background))',

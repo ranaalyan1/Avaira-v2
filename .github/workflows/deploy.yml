@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
@@ -57,6 +60,7 @@ jobs:
     needs:
       - backend-tests
       - contract-tests
+    if: ${{ secrets.DB_NAME != '' && secrets.FUJI_RPC_URL != '' && secrets.PROTOCOL_PRIVATE_KEY != '' && secrets.PERMIT_SECRET != '' }}
     env:
       MONGO_URL: ${{ secrets.MONGO_URL }}
       DB_NAME: ${{ secrets.DB_NAME }}
@@ -99,6 +103,7 @@ jobs:
       - backend-tests
       - contract-tests
       - smoke-test
+    if: ${{ always() && needs.backend-tests.result == 'success' && needs.contract-tests.result == 'success' && (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

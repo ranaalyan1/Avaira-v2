@@ -60,9 +60,9 @@ export default function Landing() {
       {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-avaira-bg/80 backdrop-blur-lg border-b border-avaira-border">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="AVAIRA" className="w-7 h-7" />
-            <span className="font-heading font-bold text-xl text-avaira-primary tracking-tight uppercase">AVAIRA</span>
+          <div className="flex items-center gap-3 depth-stage">
+            <img src="/logo.png" alt="AVAIRA" className="w-9 h-9 sm:w-10 sm:h-10 logo-3d" />
+            <span className="font-heading font-bold text-xl sm:text-2xl text-avaira-primary tracking-tight uppercase">AVAIRA</span>
           </div>
           <div className="flex items-center gap-4">
             <a href="#pillars" className="font-mono text-xs text-avaira-muted hover:text-avaira-primary transition-colors hidden sm:block">PROTOCOL</a>
@@ -88,7 +88,7 @@ export default function Landing() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-32 pb-20 px-6 relative" data-testid="hero-section">
+      <section className="pt-32 pb-20 px-6 relative depth-stage" data-testid="hero-section">
         <div className="max-w-5xl mx-auto">
           <div className="mb-4">
             <span className="font-mono text-[10px] text-avaira-primary tracking-[0.3em] border border-avaira-primary/30 px-3 py-1 bg-avaira-primary/5">
@@ -118,16 +118,16 @@ export default function Landing() {
               <LogIn size={14} /> SIGN IN
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-6 mt-16 max-w-lg">
-            <div>
+          <div className="grid grid-cols-3 gap-4 mt-16 max-w-xl">
+            <div className="depth-mini-panel">
               <p className="font-heading font-bold text-2xl text-avaira-primary">{'<'}200ms</p>
               <p className="font-mono text-[10px] text-avaira-dim uppercase tracking-wider mt-1">Finality</p>
             </div>
-            <div>
+            <div className="depth-mini-panel">
               <p className="font-heading font-bold text-2xl text-avaira-green">0.5%</p>
               <p className="font-mono text-[10px] text-avaira-dim uppercase tracking-wider mt-1">Protocol Fee</p>
             </div>
-            <div>
+            <div className="depth-mini-panel">
               <p className="font-heading font-bold text-2xl text-avaira-purple">AAA-D</p>
               <p className="font-mono text-[10px] text-avaira-dim uppercase tracking-wider mt-1">Agent Scoring</p>
             </div>
@@ -167,10 +167,10 @@ export default function Landing() {
       <section className="py-20 px-6 border-t border-avaira-border bg-avaira-card" data-testid="how-it-works-section">
         <div className="max-w-5xl mx-auto">
           <p className="font-mono text-[10px] text-avaira-primary tracking-[0.3em] mb-3">EXECUTION FLOW</p>
-          <h2 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight mb-10">
+          <h2 className="font-heading font-bold text-2xl sm:text-3xl text-white uppercase tracking-tight mb-10" style={{ textShadow: '0 0 18px rgba(255,255,255,0.12)' }}>
             How Every Transaction is Secured
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="execution-flow-grid grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               { step: "01", label: "REGISTER", desc: "Agent stakes collateral" },
               { step: "02", label: "DECLARE", desc: "Submit mission intent" },
@@ -179,18 +179,18 @@ export default function Landing() {
               { step: "05", label: "EXECUTE", desc: "On-chain settlement" },
               { step: "06", label: "SETTLE", desc: "Fees split 85/10/5" },
             ].map((s) => (
-              <div key={s.step} className="p-3 border border-avaira-border bg-avaira-bg relative group hover:border-avaira-primary/50 transition-colors" data-testid={`step-${s.step}`}>
-                <span className="font-heading font-bold text-3xl text-avaira-primary/20 group-hover:text-avaira-primary/40 transition-colors">{s.step}</span>
-                <p className="font-heading font-bold text-sm text-foreground uppercase tracking-tight mt-1">{s.label}</p>
-                <p className="font-mono text-[10px] text-avaira-dim mt-0.5">{s.desc}</p>
+              <div key={s.step} className="execution-step-card p-3 border border-avaira-border bg-avaira-bg/90 relative group" data-testid={`step-${s.step}`}>
+                <span className="execution-step-number font-heading font-bold text-3xl transition-colors">{s.step}</span>
+                <p className="font-heading font-bold text-sm text-white uppercase tracking-tight mt-1">{s.label}</p>
+                <p className="font-mono text-xs text-[#d6d9e0] mt-0.5 leading-relaxed">{s.desc}</p>
               </div>
             ))}
           </div>
-          <div className="mt-6 p-4 border border-avaira-red/30 bg-avaira-red/5">
+          <div className="execution-alert-panel mt-6 p-4 border border-avaira-red/35">
             <p className="font-heading font-bold text-sm text-avaira-red uppercase tracking-tight flex items-center gap-2">
               <Zap size={14} /> Deviation Detected?
             </p>
-            <p className="font-mono text-xs text-avaira-muted mt-1">
+            <p className="font-mono text-sm text-[#ffb8c6] mt-1">
               Agent instantly frozen. Collateral slashed. Insurance pool compensates backers. All within {'<'}200ms.
             </p>
           </div>
@@ -318,16 +318,24 @@ export default function Landing() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-6 border-t border-avaira-border">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Shield size={16} className="text-avaira-primary" strokeWidth={1.5} />
-            <span className="font-heading font-bold text-sm text-avaira-primary uppercase">AVAIRA</span>
-            <span className="font-mono text-[9px] text-avaira-dim ml-2">AVALANCHE L1</span>
+      <footer className="py-14 px-6 border-t border-avaira-border bg-avaira-card/70">
+        <div className="max-w-4xl mx-auto space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="text-center sm:text-left">
+              <p className="font-heading font-bold text-lg text-avaira-primary uppercase tracking-tight">AVAIRA</p>
+              <p className="font-mono text-xs text-avaira-dim tracking-wide mt-1">Execution Control Protocol</p>
+            </div>
+            <div className="flex items-center justify-center sm:justify-end gap-4 font-mono text-xs text-avaira-muted">
+              <a href="#pillars" className="hover:text-avaira-primary transition-colors">Protocol</a>
+              <a href="#moats" className="hover:text-avaira-primary transition-colors">Moats</a>
+              <a href="#revenue" className="hover:text-avaira-primary transition-colors">Revenue</a>
+              <a href="#sdk" className="hover:text-avaira-primary transition-colors">SDK</a>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="font-mono text-[10px] text-avaira-dim">EXECUTION CONTROL PROTOCOL v1.0 | {new Date().getFullYear()} AVAIRA</p>
-            <p className="font-mono text-[10px] text-avaira-dim">github.com/ranaalyan1/Avaira.xyz</p>
+          <div className="h-px bg-gradient-to-r from-transparent via-avaira-border to-transparent" />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-center sm:text-left">
+            <p className="font-mono text-xs text-avaira-dim">© {new Date().getFullYear()} AVAIRA. All rights reserved.</p>
+            <p className="font-mono text-xs text-avaira-dim">Built for autonomous agent trust and settlement.</p>
           </div>
         </div>
       </footer>

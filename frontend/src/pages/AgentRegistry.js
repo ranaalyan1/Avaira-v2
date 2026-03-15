@@ -182,11 +182,11 @@ export default function AgentRegistry() {
   );
 
   return (
-    <div className="animate-slide-in" data-testid="agent-registry-page">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page-shell animate-slide-in" data-testid="agent-registry-page">
+      <div className="page-header">
         <div>
-          <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">Agent Registry</h1>
-          <p className="font-mono text-xs text-avaira-muted mt-1">{agents.length} AGENTS REGISTERED</p>
+          <h1 className="page-title font-heading font-bold text-foreground uppercase tracking-tight">Agent Registry</h1>
+          <p className="page-subtitle font-mono text-xs text-avaira-muted mt-1">{agents.length} AGENTS REGISTERED</p>
         </div>
         <div className="flex items-center gap-2">
           <button data-testid="refresh-agents-btn" onClick={fetchAgents} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors">

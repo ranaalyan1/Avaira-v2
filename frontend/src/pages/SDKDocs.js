@@ -46,10 +46,12 @@ export default function SDKDocs() {
   );
 
   return (
-    <div className="animate-slide-in" data-testid="sdk-docs-page">
-      <div className="mb-6">
-        <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">SDK Documentation</h1>
-        <p className="font-mono text-xs text-avaira-muted mt-1">INTEGRATE IN 4 FUNCTION CALLS</p>
+    <div className="page-shell animate-slide-in" data-testid="sdk-docs-page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title font-heading font-bold text-foreground uppercase tracking-tight">SDK Documentation</h1>
+          <p className="page-subtitle font-mono text-xs text-avaira-muted mt-1">INTEGRATE IN 4 FUNCTION CALLS</p>
+        </div>
       </div>
 
       {/* Install */}

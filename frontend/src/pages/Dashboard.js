@@ -103,14 +103,14 @@ export default function Dashboard() {
   ].filter(d => d.value > 0) : [];
 
   return (
-    <div data-testid="dashboard-page">
+    <div className="page-shell" data-testid="dashboard-page">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="page-header">
         <div>
-          <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">
+          <h1 className="page-title font-heading font-bold text-foreground uppercase tracking-tight">
             Protocol Overview
           </h1>
-          <p className="font-mono text-xs text-avaira-muted mt-1">REAL-TIME EXECUTION MONITORING</p>
+          <p className="page-subtitle font-mono text-xs text-avaira-muted mt-1">REAL-TIME EXECUTION MONITORING</p>
         </div>
         <button
           data-testid="simulate-lifecycle-btn"

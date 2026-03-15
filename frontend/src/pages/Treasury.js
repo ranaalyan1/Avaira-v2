@@ -58,11 +58,11 @@ export default function Treasury() {
   }));
 
   return (
-    <div className="animate-slide-in" data-testid="treasury-page">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page-shell animate-slide-in" data-testid="treasury-page">
+      <div className="page-header">
         <div>
-          <h1 className="font-heading font-bold text-2xl sm:text-3xl text-foreground uppercase tracking-tight">Treasury</h1>
-          <p className="font-mono text-xs text-avaira-muted mt-1">FEE COLLECTION & DISTRIBUTION</p>
+          <h1 className="page-title font-heading font-bold text-foreground uppercase tracking-tight">Treasury</h1>
+          <p className="page-subtitle font-mono text-xs text-avaira-muted mt-1">FEE COLLECTION & DISTRIBUTION</p>
         </div>
         <button data-testid="refresh-treasury-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors">
           <RefreshCw size={14} />
