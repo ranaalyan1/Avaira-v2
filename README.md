@@ -2,16 +2,16 @@
 > The trust layer for AI agents on Avalanche. Agents stake collateral, declare risk boundaries, and get automatically slashed if they deviate.
 
 ## 🔴 Live Demo
-[Live App](https://avaira.xyz) | Demo Video: [Coming Soon](https://build.avax.network)
+[Live App](https://avaira.xyz) | Demo Video: <a href="https://build.avax.network">Coming Soon</a>
 
 ## 📍 Deployed Contracts (Avalanche Fuji Testnet)
 
 | Contract | Address | Explorer |
 | --- | --- | --- |
-| AgentRegistry | `0xA143EDF764dA665d8c9F3a7A4529879C0071eaAD` | [View on Snowtrace](https://testnet.snowtrace.io/address/0xA143EDF764dA665d8c9F3a7A4529879C0071eaAD) |
-| ExecutionWallet | `0x7e5293344fbd7eA3f65E0482887131C1a2236f24` | [View on Snowtrace](https://testnet.snowtrace.io/address/0x7e5293344fbd7eA3f65E0482887131C1a2236f24) |
-| FreezeSlash | `0x6224e6330e55322eAd2f70f4b8E86155037842D5` | [View on Snowtrace](https://testnet.snowtrace.io/address/0x6224e6330e55322eAd2f70f4b8E86155037842D5) |
-| ReputationEngine | `0x61ae129C166b51F8D9d9f997f785641426175388` | [View on Snowtrace](https://testnet.snowtrace.io/address/0x61ae129C166b51F8D9d9f997f785641426175388) |
+| AgentRegistry | `0xA143EDF764dA665d8c9F3a7A4529879C0071eaAD` | <a href="https://testnet.snowtrace.io/address/0xA143EDF764dA665d8c9F3a7A4529879C0071eaAD">View on Snowtrace</a> |
+| ExecutionWallet | `0x7e5293344fbd7eA3f65E0482887131C1a2236f24` | <a href="https://testnet.snowtrace.io/address/0x7e5293344fbd7eA3f65E0482887131C1a2236f24">View on Snowtrace</a> |
+| FreezeSlash | `0x6224e6330e55322eAd2f70f4b8E86155037842D5` | <a href="https://testnet.snowtrace.io/address/0x6224e6330e55322eAd2f70f4b8E86155037842D5">View on Snowtrace</a> |
+| ReputationEngine | `0x61ae129C166b51F8D9d9f997f785641426175388` | <a href="https://testnet.snowtrace.io/address/0x61ae129C166b51F8D9d9f997f785641426175388">View on Snowtrace</a> |
 
 > All contracts verified on Avalanche Fuji Testnet.
 > Chain ID: 43113
