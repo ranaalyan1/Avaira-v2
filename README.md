@@ -2,16 +2,19 @@
 > The trust layer for AI agents on Avalanche. Agents stake collateral, declare risk boundaries, and get automatically slashed if they deviate.
 
 ## 🔴 Live Demo
-[Live App](https://avaira.xyz) | Demo Video: [Coming Soon](https://buil.avax.network)
+[Live App](https://avaira.xyz) | Demo Video: [Coming Soon](https://build.avax.network)
 
 ## 📍 Deployed Contracts (Avalanche Fuji Testnet)
 
 | Contract | Address | Explorer |
 |---|---|---|
-| AgentRegistry | `0x0000000000000000000000000000000000000000` | `https://testnet.snowtrace.io/address/0x0000000000000000000000000000000000000000` |
-| ExecutionWallet | `0x0000000000000000000000000000000000000000` | `https://testnet.snowtrace.io/address/0x0000000000000000000000000000000000000000` |
-| FreezeSlash | `0x0000000000000000000000000000000000000000` | `https://testnet.snowtrace.io/address/0x0000000000000000000000000000000000000000` |
-| ReputationEngine | `0x0000000000000000000000000000000000000000` | `https://testnet.snowtrace.io/address/0x0000000000000000000000000000000000000000` |
+| AgentRegistry | [0xA143EDF764dA665d8c9F3a7A4529879C0071eaAD](https://testnet.snowtrace.io/address/0xA143EDF764dA665d8c9F3a7A4529879C0071eaAD) | [https://testnet.snowtrace.io/address/0xA143EDF764dA665d8c9F3a7A4529879C0071eaAD](https://testnet.snowtrace.io/address/0xA143EDF764dA665d8c9F3a7A4529879C0071eaAD) |
+| ExecutionWallet | [0x7e5293344fbd7eA3f65E0482887131C1a2236f24](https://testnet.snowtrace.io/address/0x7e5293344fbd7eA3f65E0482887131C1a2236f24) | [https://testnet.snowtrace.io/address/0x7e5293344fbd7eA3f65E0482887131C1a2236f24](https://testnet.snowtrace.io/address/0x7e5293344fbd7eA3f65E0482887131C1a2236f24) |
+| FreezeSlash | [0x6224e6330e55322eAd2f70f4b8E86155037842D5](https://testnet.snowtrace.io/address/0x6224e6330e55322eAd2f70f4b8E86155037842D5) | [https://testnet.snowtrace.io/address/0x6224e6330e55322eAd2f70f4b8E86155037842D5](https://testnet.snowtrace.io/address/0x6224e6330e55322eAd2f70f4b8E86155037842D5) |
+| ReputationEngine | [0x61ae129C166b51F8D9d9f997f785641426175388](https://testnet.snowtrace.io/address/0x61ae129C166b51F8D9d9f997f785641426175388) | [https://testnet.snowtrace.io/address/0x61ae129C166b51F8D9d9f997f785641426175388](https://testnet.snowtrace.io/address/0x61ae129C166b51F8D9d9f997f785641426175388) |
+
+> All contracts verified on Avalanche Fuji Testnet.
+> Chain ID: 43113
 
 ## 🧠 What is AVAIRA?
 
@@ -190,6 +193,17 @@ cp contracts/.env.example contracts/.env
 | POST | `/api/agent/think` | Run local agent planning and validation |
 | POST | `/api/agent/simulate-full-lifecycle` | Run the full demo lifecycle judges can inspect |
 | GET | `/api/agent/leaderboard` | Return the top AI agents by Avaira Score |
+
+## 👥 Team
+| Name | Role |
+|------|------|
+| Rana Alyan | Protocol Engineer & Founder |
+| [Team Member 2] | Business Development |
+| [Team Member 3] | Growth & Marketing |
+| [Team Member 4] | Community |
+
+Built with AI-assisted development using Claude,
+Kimi, and Gemini CLI.
 
 ## License
 
