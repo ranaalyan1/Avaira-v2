@@ -935,10 +935,10 @@ async def register_agent(body: AgentCreate, request: Request, _user: Dict[str, A
         except Exception as err:
             logger.warning(f"On-chain registration failed: {err}")
             agent["on_chain_registered"] = False
-            agent["on_chain_registration_reason"] = f"On-chain registration failed: {err}"
+            agent["on_chain_registration_reason"] = "On-chain registration failed; check server logs"
             await db.agents.update_one(
                 {"id": agent["id"]},
-                {"$set": {"on_chain_registered": False, "on_chain_registration_reason": str(err)}},
+                {"$set": {"on_chain_registered": False, "on_chain_registration_reason": "On-chain registration failed; check server logs"}},
             )
     else:
         agent["on_chain_registered"] = False
@@ -1139,7 +1139,7 @@ async def create_execution_request(body: ExecutionRequestCreate):
     except Exception as chain_err:
         logger.error(f"On-chain execution failed: {chain_err}")
         on_chain_status = "unavailable" if not can_attempt_onchain else "failed"
-        error_message = str(chain_err)
+        error_message = "On-chain execution failed; check server logs"
 
     if on_chain_status == "confirmed":
         execution["tx_hash"] = real_tx_hash
@@ -2117,7 +2117,19 @@ app.add_middleware(
     CORSMiddleware,
     allow_credentials=allow_credentials,
     allow_origins=cors_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    if COOKIE_SECURE:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 

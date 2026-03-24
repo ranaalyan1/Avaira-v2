@@ -17,10 +17,10 @@ jobs:
         working-directory: backend
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 
@@ -37,7 +37,7 @@ jobs:
       - name: Notify Vercel check - backend-tests
         if: ${{ always() }}
         continue-on-error: true
-        uses: vercel/repository-dispatch/actions/status@v1
+        uses: vercel/repository-dispatch/actions/status@30f760c6640485cd92f8c785ef361382555fb712 # v1
         with:
           name: Vercel - avaira-v2: backend-tests
 
@@ -48,10 +48,10 @@ jobs:
         working-directory: contracts
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
@@ -66,7 +66,7 @@ jobs:
       - name: Notify Vercel check - contract-tests
         if: ${{ always() }}
         continue-on-error: true
-        uses: vercel/repository-dispatch/actions/status@v1
+        uses: vercel/repository-dispatch/actions/status@30f760c6640485cd92f8c785ef361382555fb712 # v1
         with:
           name: Vercel - avaira-v2: contract-tests
 
@@ -85,10 +85,10 @@ jobs:
       PERMIT_PRIVATE_KEY: ${{ secrets.PERMIT_PRIVATE_KEY }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 
@@ -99,7 +99,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
@@ -115,7 +115,7 @@ jobs:
       - name: Notify Vercel check - smoke-test
         if: ${{ always() }}
         continue-on-error: true
-        uses: vercel/repository-dispatch/actions/status@v1
+        uses: vercel/repository-dispatch/actions/status@30f760c6640485cd92f8c785ef361382555fb712 # v1
         with:
           name: Vercel - avaira-v2: smoke-test
 
@@ -128,10 +128,10 @@ jobs:
     if: ${{ always() && needs.backend-tests.result == 'success' && needs.contract-tests.result == 'success' && (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
@@ -146,7 +146,7 @@ jobs:
         run: npm run build
 
       - name: Deploy Full Stack To Vercel
-        uses: amondnet/vercel-action@v25
+        uses: amondnet/vercel-action@16e87c0a08142b0d0d33b76aeaf20823c381b9b9 # v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
@@ -158,6 +158,6 @@ jobs:
       - name: Notify Vercel check - deploy-frontend
         if: ${{ always() }}
         continue-on-error: true
-        uses: vercel/repository-dispatch/actions/status@v1
+        uses: vercel/repository-dispatch/actions/status@30f760c6640485cd92f8c785ef361382555fb712 # v1
         with:
           name: Vercel - avaira-v2: deploy-frontend
