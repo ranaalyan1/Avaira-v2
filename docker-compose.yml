@@ -1,0 +1,61 @@
+version: '3.9'
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: avaira
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      DB_NAME: avaira
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - ./deployments:/app/deployments:ro
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:8001
+      REACT_APP_CHAIN_ID: ${CHAIN_ID:-43114}
+    depends_on:
+      - backend
+
+  hardhat:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./contracts:/app
+    ports:
+      - "8545:8545"
+    command: sh -c "npm ci && npx hardhat node --hostname 0.0.0.0"
+    profiles:
+      - local
+
+volumes:
+  mongo_data:

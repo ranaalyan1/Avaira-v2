@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: cd contracts && npm ci
+      - run: cd contracts && npm run compile
+      - run: cd contracts && npm test
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports: ['27017:27017']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r backend/requirements.txt pytest pytest-asyncio pytest-cov --break-system-packages
+      - run: pytest tests/test_ai_validator.py -q --tb=short
+        env:
+          MONGO_URL: mongodb://localhost:27017
+          DB_NAME: avaira_test
+          PERMIT_SECRET: test-secret-32-chars-minimum-here
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: cd frontend && yarn install --frozen-lockfile
+      - run: cd frontend && yarn build
+      - run: cd frontend && yarn test --passWithNoTests --watchAll=false

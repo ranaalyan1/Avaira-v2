@@ -1,0 +1,34 @@
+name: Deploy Contracts
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Target network'
+        required: true
+        default: 'fuji'
+        type: choice
+        options: [fuji, mainnet]
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.network }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.network }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: cd contracts && npm ci
+      - run: cd contracts && npm run compile
+      - name: Deploy
+        run: cd contracts && npm run deploy:${{ inputs.network }}
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          SNOWTRACE_API_KEY: ${{ secrets.SNOWTRACE_API_KEY }}
+          TRUST_POOL_WALLET: ${{ secrets.TRUST_POOL_WALLET }}
+          PROTOCOL_REVENUE_WALLET: ${{ secrets.PROTOCOL_REVENUE_WALLET }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deployments-${{ inputs.network }}
+          path: contracts/deployments/${{ inputs.network }}.json

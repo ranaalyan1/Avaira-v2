@@ -1,0 +1,19 @@
+# AVAIRA Protocol - https://avaira.xyz
+# Public website content is crawlable.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# Major AI and search crawlers (explicitly allowed)
+User-agent: GPTBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+# Sitemap location
+Sitemap: https://avaira.xyz/sitemap.xml

@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --background: 0 0% 2%;
+        --foreground: 0 0% 97%;
+        --card: 0 0% 7%;
+        --card-foreground: 0 0% 97%;
+        --popover: 0 0% 7%;
+        --popover-foreground: 0 0% 97%;
+        --primary: 0 76% 59%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 270 100% 50%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 0 0% 10%;
+        --muted-foreground: 0 0% 78%;
+        --accent: 0 0% 10%;
+        --accent-foreground: 0 0% 92%;
+        --destructive: 348 100% 50%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 0 0% 26%;
+        --input: 0 0% 16%;
+        --ring: 0 76% 59%;
+        --chart-1: 0 76% 59%;
+        --chart-2: 105 100% 54%;
+        --chart-3: 270 100% 50%;
+        --chart-4: 48 100% 50%;
+        --chart-5: 348 100% 50%;
+        --radius: 0.125rem;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-avaira-bg text-foreground font-body;
+        font-size: 17px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    p {
+        color: hsl(var(--muted-foreground));
+    }
+
+    h1, h2, h3, h4 {
+        letter-spacing: -0.02em;
+    }
+}
+
+@layer base {
+    [data-debug-wrapper="true"] {
+        display: contents !important;
+    }
+    [data-debug-wrapper="true"] > * {
+        margin-left: inherit; margin-right: inherit; margin-top: inherit; margin-bottom: inherit;
+        padding-left: inherit; padding-right: inherit; padding-top: inherit; padding-bottom: inherit;
+        column-gap: inherit; row-gap: inherit; gap: inherit;
+        border-left-width: inherit; border-right-width: inherit; border-top-width: inherit; border-bottom-width: inherit;
+        border-left-style: inherit; border-right-style: inherit; border-top-style: inherit; border-bottom-style: inherit;
+        border-left-color: inherit; border-right-color: inherit; border-top-color: inherit; border-bottom-color: inherit;
+    }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0A0A0A; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: #E84444; }
+
+/* Selection */
+::selection { background: rgba(232, 68, 68, 0.2); color: #E84444; }
