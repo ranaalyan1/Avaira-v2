@@ -31,7 +31,7 @@ class AvairaAgent:
     def __init__(self, agent_id: str, risk_envelope: dict, db_client=None):
         self.agent_id = agent_id
         self.risk_envelope = risk_envelope
-        self.client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        self.client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         self.validator = AvairaValidator()
         self.logger = IntentLogger(db_client=db_client)
         self.reputation = ReputationEngine(db_client=db_client)
@@ -59,7 +59,7 @@ class AvairaAgent:
         }}
         """
 
-        resp = self.client.messages.create(
+        resp = await self.client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=1000,
             system=system_prompt,
