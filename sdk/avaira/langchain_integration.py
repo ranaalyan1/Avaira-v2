@@ -20,10 +20,23 @@ class AvairaProtectedTool(BaseTool):
             "parameters": {"args": args, "kwargs": kwargs},
             "estimated_value": 0.0
         }
-        # Note: LangChain _run is often sync. Using loop.run_until_complete is risky.
-        # In a real SDK we'd handle sync/async properly.
-        loop = asyncio.get_event_loop()
-        validation = loop.run_until_complete(self.avaira.validate(intent))
+
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if loop.is_running():
+            # If loop is already running, we are likely in an async environment
+            # but being called via a sync tool.
+            import threading
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor() as executor:
+                validation = executor.submit(lambda: asyncio.run(self.avaira.validate(intent))).result()
+        else:
+            validation = loop.run_until_complete(self.avaira.validate(intent))
 
         if not validation["approved"]:
             raise AvairaBlockedError(

@@ -108,6 +108,7 @@ export default function AgentRegistry() {
   const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [newKey, setNewKey] = useState(null);
   const [form, setForm] = useState({
     name: "", goal: "", webhook_url: "",
     max_spend_usd: "50.0", allowed_actions: "search,summarize,email",
@@ -148,8 +149,8 @@ export default function AgentRegistry() {
           require_human_approval_above_usd: parseFloat(form.require_human_approval_above_usd)
         }
       });
-      toast.success("Agent registered successfully. API Key generated.");
-      console.log("API KEY:", resp.data.api_key); // In real app, show to user
+      toast.success("Agent registered successfully.");
+      setNewKey(resp.data.api_key);
       setOpen(false);
       setForm({ name: "", goal: "", webhook_url: "", max_spend_usd: "50.0", allowed_actions: "search,summarize,email", require_human_approval_above_usd: "100.0" });
       fetchAgents();
@@ -217,6 +218,33 @@ export default function AgentRegistry() {
           </Dialog>
         </div>
       </div>
+
+      <Dialog open={!!newKey} onOpenChange={() => setNewKey(null)}>
+        <DialogContent className="bg-avaira-card border-avaira-primary border-2 rounded-none max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading font-bold text-lg text-avaira-primary uppercase tracking-tight flex items-center gap-2">
+              <Shield size={18} /> API KEY GENERATED
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="font-mono text-xs text-foreground">
+              This is the only time your API key will be shown. Store it securely.
+            </p>
+            <div className="bg-black border border-avaira-primary p-3 font-mono text-sm text-avaira-primary break-all select-all cursor-pointer" title="Click to copy" onClick={() => {
+              navigator.clipboard.writeText(newKey);
+              toast.success("API Key copied to clipboard");
+            }}>
+              {newKey}
+            </div>
+            <button
+              onClick={() => setNewKey(null)}
+              className="w-full cyber-btn bg-avaira-primary text-white py-2 font-heading text-sm mt-2 uppercase"
+            >
+              I HAVE SAVED THE KEY
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {loading ? (
         <div className="cyber-card p-12 text-center">

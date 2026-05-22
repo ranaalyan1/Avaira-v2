@@ -53,7 +53,8 @@ class ReputationEngine:
             {"$group": {"_id": None, "total_value": {"$sum": "$value"}}}
         ]
         cursor = self.db.executions.aggregate(pipeline)
-        agg_result = await cursor.to_list(1)
+        # Motor returns a cursor that we convert to a list
+        agg_result = await cursor.to_list(length=1)
         total_value = agg_result[0]["total_value"] if agg_result else 0
         volume_score = min(100, math.log10(total_value + 1) * 20)
 

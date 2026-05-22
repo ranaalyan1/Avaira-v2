@@ -55,10 +55,10 @@ class SlashEngine:
     async def slash(self, agent_id: str, reason: str, severity: str) -> SlashResult:
         actions = []
 
-        # LAYER 1: Immediate Suspension
+        # LAYER 1: Immediate Suspension (Frozen)
         await self.db.agents.update_one(
             {"id": agent_id},
-            {"$set": {"status": "suspended", "suspended_at": datetime.now(timezone.utc).isoformat()}}
+            {"$set": {"status": "frozen", "frozen_at": datetime.now(timezone.utc).isoformat()}}
         )
         actions.append("suspended_api_key")
 

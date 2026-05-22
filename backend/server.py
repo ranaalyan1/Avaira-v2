@@ -913,15 +913,19 @@ async def logout(request: Request):
     resp.delete_cookie("session_token", path="/")
     return resp
 
+def _hash_api_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
 # ─── AGENT ENDPOINTS ────────────────────────────────────────────
 @api_router.post("/agents/register")
 async def register_agent(body: AgentCreate, request: Request, _user: Dict[str, Any] = Depends(require_authenticated_user)):
     agent_id = str(uuid.uuid4())
     api_key = secrets.token_urlsafe(32)
+    api_key_hash = _hash_api_key(api_key)
 
     agent = {
         "id": agent_id,
-        "api_key": api_key, # In production, store hash
+        "api_key_hash": api_key_hash,
         "user_id": _user["user_id"],
         "name": body.name,
         "goal": body.goal,
@@ -1892,9 +1896,14 @@ async def _get_agent_from_key(request: Request):
     api_key = request.headers.get("X-Avaira-API-Key")
     if not api_key:
         raise HTTPException(401, "Missing X-Avaira-API-Key")
-    agent = await db.agents.find_one({"api_key": api_key})
+
+    api_key_hash = _hash_api_key(api_key)
+    agent = await db.agents.find_one({"api_key_hash": api_key_hash})
+
     if not agent:
         raise HTTPException(401, "Invalid API Key")
+    if agent.get("status") in ["frozen", "suspended"]:
+        raise HTTPException(403, f"Agent is {agent.get('status')} due to a policy violation")
     return agent
 
 @api_router.post("/agents/{agent_id}/run")
@@ -2218,3 +2227,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

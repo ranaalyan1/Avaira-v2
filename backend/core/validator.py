@@ -57,39 +57,66 @@ Return ONLY valid JSON:
 class AvairaValidator:
     def __init__(self):
         self.api_key = os.environ.get("ANTHROPIC_API_KEY")
-        self.client = anthropic.Anthropic(api_key=self.api_key)
+        self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
         self.model = "claude-3-5-haiku-20241022"
+
+    def _extract_json(self, text: str) -> dict:
+        """Robustly extract JSON from LLM response."""
+        try:
+            # Try direct load
+            return json.loads(text)
+        except json.JSONDecodeError:
+            # Try to find json block
+            import re
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group())
+                except:
+                    pass
+            return {}
 
     async def validate(self, intent: dict, risk_envelope: dict) -> ValidationResult:
         start_time = time.time()
 
-        # PASS 1: Compliance
-        compliance_resp = self.client.messages.create(
-            model=self.model,
-            max_tokens=1000,
-            system="Return only JSON.",
-            messages=[{"role": "user", "content": COMPLIANCE_PROMPT.format(
-                risk_envelope=json.dumps(risk_envelope),
-                intent=json.dumps(intent)
-            )}]
-        )
-        compliance_data = json.loads(compliance_resp.content[0].text)
+        try:
+            # PASS 1: Compliance
+            compliance_resp = await self.client.messages.create(
+                model=self.model,
+                max_tokens=1000,
+                system="Return ONLY valid JSON.",
+                messages=[{"role": "user", "content": COMPLIANCE_PROMPT.format(
+                    risk_envelope=json.dumps(risk_envelope),
+                    intent=json.dumps(intent)
+                )}]
+            )
+            compliance_data = self._extract_json(compliance_resp.content[0].text)
 
-        # PASS 2: Adversarial
-        adversarial_resp = self.client.messages.create(
-            model=self.model,
-            max_tokens=1000,
-            system="Return only JSON.",
-            messages=[{"role": "user", "content": ADVERSARIAL_PROMPT.format(
-                risk_envelope=json.dumps(risk_envelope),
-                intent=json.dumps(intent),
-                compliance_result=json.dumps(compliance_data)
-            )}]
-        )
-        adversarial_data = json.loads(adversarial_resp.content[0].text)
+            # PASS 2: Adversarial
+            adversarial_resp = await self.client.messages.create(
+                model=self.model,
+                max_tokens=1000,
+                system="Return ONLY valid JSON.",
+                messages=[{"role": "user", "content": ADVERSARIAL_PROMPT.format(
+                    risk_envelope=json.dumps(risk_envelope),
+                    intent=json.dumps(intent),
+                    compliance_result=json.dumps(compliance_data)
+                )}]
+            )
+            adversarial_data = self._extract_json(adversarial_resp.content[0].text)
 
-        # Final decision
-        approved = compliance_data.get("approved", False) and not adversarial_data.get("override_approval", False)
+            # Final decision
+            approved = compliance_data.get("approved", False) and not adversarial_data.get("override_approval", False)
+        except Exception as e:
+            # Fallback to safe rejection if LLM fails
+            return ValidationResult(
+                approved=False,
+                risk_score=1.0,
+                violations=["validator_internal_error"],
+                compliance_reasoning=f"Internal error: {str(e)}",
+                adversarial_findings="N/A",
+                latency_ms=int((time.time() - start_time) * 1000)
+            )
 
         latency = int((time.time() - start_time) * 1000)
 
