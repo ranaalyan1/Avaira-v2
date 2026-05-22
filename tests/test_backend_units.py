@@ -23,11 +23,11 @@ class TestChainConfig:
     def test_sepolia_present(self):
         assert 11155111 in SUPPORTED_CHAINS
 
-    def test_base_goerli_present(self):
-        assert 84531 in SUPPORTED_CHAINS
+    def test_base_sepolia_present(self):
+        assert 84532 in SUPPORTED_CHAINS
 
-    def test_arbitrum_goerli_present(self):
-        assert 421613 in SUPPORTED_CHAINS
+    def test_arbitrum_sepolia_present(self):
+        assert 421614 in SUPPORTED_CHAINS
 
     def test_fuji_defaults(self):
         chain = SUPPORTED_CHAINS[43113]
