@@ -116,7 +116,7 @@ export default function Layout() {
               <span className="status-dot active" />
               <span className="font-mono text-[10px] text-avaira-green tracking-wider">PROTOCOL ONLINE</span>
             </div>
-            <p className="font-mono text-[9px] text-avaira-dim mt-1">AVALANCHE FUJI C-CHAIN</p>
+            <p className="font-mono text-[9px] text-avaira-dim mt-1">TRUST & ACCOUNTABILITY ENGINE</p>
           </div>
         </div>
       </aside>
@@ -140,8 +140,8 @@ export default function Layout() {
         </div>
         <footer className="px-6 md:px-8 py-4 border-t border-avaira-border">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <p className="font-mono text-[10px] text-avaira-dim">AVAIRA Protocol | Fuji Testnet | v1</p>
-            <p className="font-mono text-[10px] text-avaira-dim">Realtime enforcement and insured settlement</p>
+            <p className="font-mono text-[10px] text-avaira-dim">AVAIRA Protocol | v2.0-core</p>
+            <p className="font-mono text-[10px] text-avaira-dim">Real-time trust and automated consequences</p>
           </div>
         </footer>
       </main>

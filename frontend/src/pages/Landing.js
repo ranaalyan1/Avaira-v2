@@ -23,25 +23,20 @@ const REVENUE = [
   { name: "Data & Analytics", year1: "$300K", year5: "$80M", desc: "Bloomberg Terminal for AI agents. $0.01/query API access" },
 ];
 
-const SDK_CODE = `import { AvairaSDK } from '@avaira/sdk';
+const SDK_CODE = `from avaira import AvairaClient, AvairaConfig, RiskEnvelope
 
-const avaira = new AvairaSDK({
-  apiKey: 'your-api-key',
-  network: 'fuji',
-  chainId: 43113
-});
+# 1. Define boundaries
+envelope = RiskEnvelope(max_spend_usd=50.0, allowed_actions=["search"])
+config = AvairaConfig(api_key="your_api_key", risk_envelope=envelope)
+avaira = AvairaClient(config)
 
-// 1. Register agent
-const agent = await avaira.register(wallet, config);
+# 2. Wrap your agent
+result = await avaira.run(
+    task="Search for YC news",
+    execute_fn=lambda: my_agent.run("Search for YC news")
+)
 
-// 2. Declare intent
-const mission = await avaira.declareIntent(plan);
-
-// 3. Execute (AVAIRA monitors automatically)
-const result = await avaira.execute(action);
-
-// 4. Settle
-const settlement = await avaira.settle(mission.id);`;
+print(result["status"]) # 'completed' or 'blocked'`;
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -92,15 +87,15 @@ export default function Landing() {
         <div className="max-w-5xl mx-auto">
           <div className="mb-4">
             <span className="font-mono text-[10px] text-avaira-primary tracking-[0.3em] border border-avaira-primary/30 px-3 py-1 bg-avaira-primary/5">
-              AVALANCHE L1 // EXECUTION CONTROL PROTOCOL
+              TRUST & ACCOUNTABILITY // FOR ALL AI AGENTS
             </span>
           </div>
           <h1 className="font-heading font-bold text-4xl sm:text-5xl lg:text-6xl text-foreground uppercase tracking-tight leading-[1.1] max-w-4xl">
-            The Trust Infrastructure for the{" "}
-            <span className="text-avaira-primary" style={{ textShadow: '0 0 30px rgba(232,68,68,0.3)' }}>Autonomous Economy</span>
+            Add Trust to Any AI Agent in{" "}
+            <span className="text-avaira-primary" style={{ textShadow: '0 0 30px rgba(232,68,68,0.3)' }}>3 Lines of Python</span>
           </h1>
           <p className="font-body text-base sm:text-lg text-avaira-muted mt-6 max-w-2xl leading-relaxed">
-            We rate, clear, and insure every AI agent transaction on-chain &mdash; so machines can manage billions and humans can sleep at night.
+            No crypto. No wallet. No gas. Avaira gives your agents a public reputation score, a tamper-evident audit trail, and automatic consequences for bad behavior.
           </p>
           <div className="flex items-center gap-4 mt-8">
             <button

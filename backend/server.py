@@ -35,6 +35,20 @@ except ImportError:  # pragma: no cover
     from permit import generate_permit as generate_structured_permit, verify_permit as verify_structured_permit
     from chains import SUPPORTED_CHAINS, get_chain
 
+# Core Trust Engine Imports
+try:
+    from core.intent_logger import IntentLogger
+    from core.validator import AvairaValidator
+    from core.slash_engine import SlashEngine
+    from core.reputation import ReputationEngine
+    from agents.avaira_agent import AvairaAgent as RealAvairaAgent
+except ImportError:
+    from .core.intent_logger import IntentLogger
+    from .core.validator import AvairaValidator
+    from .core.slash_engine import SlashEngine
+    from .core.reputation import ReputationEngine
+    from .agents.avaira_agent import AvairaAgent as RealAvairaAgent
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -51,6 +65,12 @@ client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=3000)
 db = client[db_name]
 api_router = APIRouter(prefix="/api")
 DATABASE_READY = True
+
+# Initialize Core Engines
+intent_logger = IntentLogger(db_client=db)
+avaira_validator = AvairaValidator()
+slash_engine = SlashEngine(db_client=db)
+reputation_engine = ReputationEngine(db_client=db)
 
 # ─── PROTOCOL CONSTANTS ─────────────────────────────────────────
 PROTOCOL_FEE_RATE = 0.005  # 0.5%
@@ -78,6 +98,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 if "localhost" in mongo_url.lower():
     logger.warning("WARNING: Using local MongoDB. Switch to Atlas for production.")
 
+AVAIRA_ADMIN_KEY = os.environ.get("AVAIRA_ADMIN_KEY", "")
 PERMIT_SECRET = _get_required_env("PERMIT_SECRET")
 ADMIN_EMAILS = {email.strip().lower() for email in os.environ.get("ADMIN_EMAILS", "").split(",") if email.strip()}
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
@@ -290,17 +311,20 @@ app = FastAPI(title="AVAIRA Protocol API", lifespan=lifespan)
 
 # ─── PYDANTIC MODELS ────────────────────────────────────────────
 class RiskEnvelope(BaseModel):
-    max_tx_value: float = 10.0
-    max_daily_txns: int = 50
-    allowed_actions: List[str] = ["transfer", "swap", "stake"]
-    max_slippage: float = 0.05
+    max_spend_usd: float = 0.0
+    max_spend_per_action_usd: float = 0.0
+    allowed_actions: List[str] = []
+    blocked_actions: List[str] = []
+    allowed_targets: List[str] = []
+    max_concurrent_tasks: int = 1
+    require_human_approval_above_usd: float = 100.0
+    custom_rules: List[str] = []
 
 class AgentCreate(BaseModel):
     name: str
-    wallet_address: str
-    collateral_amount: float
-    mission_intent: str
+    goal: str
     risk_envelope: RiskEnvelope = RiskEnvelope()
+    webhook_url: Optional[str] = None
 
 class AgentResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -354,9 +378,13 @@ class MissionStake(BaseModel):
 class AgentThinkRequest(BaseModel):
     agent_address: str
     mission_goal: str
-    risk_envelope: RuntimeRiskEnvelope
+    risk_envelope: Dict[str, Any]
     market_context: Dict[str, Any] = Field(default_factory=dict)
     history: List[Dict[str, Any]] = Field(default_factory=list)
+
+class AgentRunRequest(BaseModel):
+    task: str
+    context: Optional[Dict[str, Any]] = None
 
 # ─── HELPER FUNCTIONS ────────────────────────────────────────────
 async def _next_permit_nonce(agent_id: str) -> int:
@@ -888,64 +916,28 @@ async def logout(request: Request):
 # ─── AGENT ENDPOINTS ────────────────────────────────────────────
 @api_router.post("/agents/register")
 async def register_agent(body: AgentCreate, request: Request, _user: Dict[str, Any] = Depends(require_authenticated_user)):
-    if body.collateral_amount < 0.1:
-        raise HTTPException(400, "Minimum collateral is 0.1 AVAX")
-    if not is_valid_evm_address(body.wallet_address):
-        raise HTTPException(400, "Invalid wallet address format")
+    agent_id = str(uuid.uuid4())
+    api_key = secrets.token_urlsafe(32)
+
     agent = {
-        "id": str(uuid.uuid4()),
+        "id": agent_id,
+        "api_key": api_key, # In production, store hash
+        "user_id": _user["user_id"],
         "name": body.name,
-        "wallet_address": body.wallet_address,
-        "collateral_amount": body.collateral_amount,
-        "collateral_remaining": body.collateral_amount,
-        "mission_intent": body.mission_intent,
+        "goal": body.goal,
         "risk_envelope": body.risk_envelope.model_dump(),
+        "webhook_url": body.webhook_url,
         "status": "active",
         "reputation": INITIAL_REPUTATION,
         "total_executions": 0,
         "successful_executions": 0,
         "failed_executions": 0,
         "registered_at": datetime.now(timezone.utc).isoformat(),
-        "chain_id": "43113"
     }
     await db.agents.insert_one(agent)
 
-    if AGENT_REGISTRY_ADDRESS and protocol_account:
-        try:
-            registry_contract = get_registry_contract()
-            envelope_tuple = (
-                w3.to_wei(body.risk_envelope.max_tx_value, "ether"),
-                min(100, max(0, int(round(body.risk_envelope.max_slippage * 100)))),
-                ",".join(body.risk_envelope.allowed_actions),
-            )
-            on_chain_tx = await send_tx(
-                registry_contract.functions.registerFor(
-                    Web3.to_checksum_address(body.wallet_address),
-                    body.name,
-                    envelope_tuple,
-                ),
-                value_wei=w3.to_wei(body.collateral_amount, "ether"),
-            )
-            agent["on_chain_registered"] = True
-            agent["on_chain_tx"] = on_chain_tx
-            await db.agents.update_one(
-                {"id": agent["id"]},
-                {"$set": {"on_chain_registered": True, "on_chain_tx": on_chain_tx}},
-            )
-        except Exception as err:
-            logger.warning(f"On-chain registration failed: {err}")
-            agent["on_chain_registered"] = False
-            agent["on_chain_registration_reason"] = f"On-chain registration failed: {err}"
-            await db.agents.update_one(
-                {"id": agent["id"]},
-                {"$set": {"on_chain_registered": False, "on_chain_registration_reason": str(err)}},
-            )
-    else:
-        agent["on_chain_registered"] = False
-        agent["on_chain_registration_reason"] = "Contract address or protocol key missing"
-
     agent.pop("_id", None)
-    return agent
+    return {"agent_id": agent_id, "api_key": api_key}
 
 
 @api_router.get("/chains")
@@ -1346,10 +1338,29 @@ async def list_treasury_transactions(limit: int = Query(100, ge=1, le=500)):
     return txs
 
 # ─── REPUTATION ENDPOINTS ───────────────────────────────────────
-@api_router.get("/reputation/leaderboard")
+@api_router.get("/leaderboard")
 async def get_leaderboard(limit: int = Query(20, ge=1, le=200)):
-    agents = await db.agents.find({}, {"_id": 0}).sort("reputation", -1).to_list(limit)
-    return agents
+    # Returns top agents by Avaira score
+    agents = await db.agents.find({}, {"_id": 0}).to_list(100)
+    results = []
+    for agent in agents:
+        try:
+            score = await reputation_engine.compute_score(agent["id"])
+            results.append({
+                "agent_id": agent["id"],
+                "name": agent["name"],
+                "score": score.score,
+                "grade": score.grade,
+                "status": agent["status"]
+            })
+        except:
+            continue
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return results[:limit]
+
+@api_router.get("/reputation/leaderboard")
+async def get_leaderboard_legacy(limit: int = Query(20, ge=1, le=200)):
+    return await get_leaderboard(limit)
 
 @api_router.get("/reputation/{agent_id}/history")
 async def get_reputation_history(agent_id: str, limit: int = Query(50, ge=1, le=500)):
@@ -1677,11 +1688,12 @@ def calculate_avaira_score(agent: Dict) -> Dict:
 # ─── AVAIRA SCORE ENDPOINTS ─────────────────────────────────────
 @api_router.get("/agents/{agent_id}/score")
 async def get_agent_score(agent_id: str):
-    agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
-    if not agent:
-        raise HTTPException(404, "Agent not found")
-    score = calculate_avaira_score(agent)
-    return {**score, "agent_id": agent_id, "agent_name": agent["name"], "status": agent["status"]}
+    try:
+        score = await reputation_engine.compute_score(agent_id)
+        agent = await db.agents.find_one({"id": agent_id})
+        return {**score.model_dump(), "agent_id": agent_id, "agent_name": agent["name"], "status": agent["status"]}
+    except ValueError as e:
+        raise HTTPException(404, str(e))
 
 @api_router.get("/scores/all")
 async def get_all_scores():
@@ -1860,59 +1872,106 @@ async def get_revenue_streams():
 @api_router.get("/sdk/docs")
 async def get_sdk_docs():
     return {
-        "sdk_name": "AvairaSDK",
-        "languages": ["TypeScript", "Rust"],
-        "version": "1.0.0",
-        "install": {"typescript": "npm install @avaira/sdk", "rust": "cargo add avaira-sdk"},
+        "sdk_name": "Avaira Python SDK",
+        "languages": ["Python"],
+        "version": "0.1.0",
+        "install": {"python": "pip install avaira-sdk"},
         "functions": [
-            {"name": "register", "description": "Register an AI agent with the AVAIRA protocol", "params": [{"name": "agentWallet", "type": "string"}, {"name": "config", "type": "AgentConfig"}], "returns": "Promise<AgentRegistration>",
-             "example": "const agent = await avaira.register(wallet.address, {\n  name: 'TradingBot-Alpha',\n  missionIntent: 'DeFi yield optimization',\n  collateral: '5.0',\n  riskEnvelope: {\n    maxTxValue: 10.0,\n    maxDailyTxns: 50,\n    allowedActions: ['swap', 'stake', 'transfer'],\n    maxSlippage: 0.05\n  }\n});"},
-            {"name": "declareIntent", "description": "Declare mission intent before executing", "params": [{"name": "missionPlan", "type": "MissionPlan"}], "returns": "Promise<MissionDeclaration>",
-             "example": "const mission = await avaira.declareIntent({\n  description: 'Rebalance AVAX/USDC LP position',\n  targetValue: 2.5,\n  duration: 24,\n  riskLevel: 'medium'\n});"},
-            {"name": "execute", "description": "Execute an action through AVAIRA's enforcement layer", "params": [{"name": "action", "type": "ExecutionAction"}], "returns": "Promise<ExecutionResult>",
-             "example": "const result = await avaira.execute({\n  action: 'swap',\n  target: '0xDEF1...abc',\n  value: 2.5,\n  data: swapCalldata\n});\n// AVAIRA validates risk envelope\n// Signs EIP-712 permit\n// Executes via ExecutionWallet\n// Deducts 0.5% fee\n// Updates reputation"},
-            {"name": "settle", "description": "Settle a completed mission", "params": [{"name": "missionId", "type": "string"}], "returns": "Promise<SettlementResult>",
-             "example": "const settlement = await avaira.settle(mission.id);\n// Agent earns 85% of mission value\n// Underwriters earn 10%\n// AVAIRA takes 5%\n// Reputation updated\n// Avaira Score recalculated"}
+            {"name": "register", "description": "Register an AI agent with Avaira", "params": [{"name": "name", "type": "string"}, {"name": "goal", "type": "string"}], "returns": "str",
+             "example": "agent_id = await avaira.register(name='ResearchBot', goal='Market analysis')"},
+            {"name": "run", "description": "Run a task with Avaira protection", "params": [{"name": "task", "type": "string"}, {"name": "execute_fn", "type": "callable"}], "returns": "RunResult",
+             "example": "result = await avaira.run(task='Search news', execute_fn=my_fn)"},
+            {"name": "validate", "description": "Standalone intent validation", "params": [{"name": "intent", "type": "dict"}], "returns": "ValidationResult",
+             "example": "val = await avaira.validate(my_intent)"}
         ],
-        "quick_start": "import { AvairaSDK } from '@avaira/sdk';\n\nconst avaira = new AvairaSDK({\n  apiKey: 'your-api-key',\n  network: 'fuji', // or 'mainnet'\n  chainId: 43113\n});\n\n// Register agent\nconst agent = await avaira.register(wallet, config);\n\n// Declare intent\nconst mission = await avaira.declareIntent(plan);\n\n// Execute (monitored by AVAIRA)\nconst result = await avaira.execute(action);\n\n// Settle\nconst settlement = await avaira.settle(mission.id);"
+        "quick_start": "from avaira import AvairaClient, AvairaConfig, RiskEnvelope\n\n# 1. Define boundaries\nenvelope = RiskEnvelope(max_spend_usd=50.0, allowed_actions=['search'])\nconfig = AvairaConfig(api_key='your_api_key', risk_envelope=envelope)\navaira = AvairaClient(config)\n\n# 2. Wrap your agent\nresult = await avaira.run(\n    task='Search for YC news',\n    execute_fn=lambda: my_agent.run('Search for YC news')\n)\n\nprint(result['status'])"
     }
 
+
+async def _get_agent_from_key(request: Request):
+    api_key = request.headers.get("X-Avaira-API-Key")
+    if not api_key:
+        raise HTTPException(401, "Missing X-Avaira-API-Key")
+    agent = await db.agents.find_one({"api_key": api_key})
+    if not agent:
+        raise HTTPException(401, "Invalid API Key")
+    return agent
+
+@api_router.post("/agents/{agent_id}/run")
+async def agent_run(agent_id: str, body: AgentRunRequest, agent: Dict = Depends(_get_agent_from_key)):
+    if agent["id"] != agent_id:
+        raise HTTPException(403, "API Key does not match agent ID")
+
+    real_agent = RealAvairaAgent(agent["id"], agent["risk_envelope"], db_client=db)
+    result = await real_agent.run(body.task)
+    return result
+
+@api_router.post("/agents/{agent_id}/log")
+async def agent_log_outcome(agent_id: str, body: Dict[str, Any], agent: Dict = Depends(_get_agent_from_key)):
+    if agent["id"] != agent_id:
+        raise HTTPException(403, "API Key does not match agent ID")
+
+    intent = body.get("intent")
+    status = body.get("status")
+    result = body.get("result")
+
+    await intent_logger.log(intent, agent_id, agent["risk_envelope"])
+    await db.executions.insert_one({
+        "trace_id": str(uuid.uuid4()),
+        "agent_id": agent_id,
+        "intent": intent,
+        "status": status,
+        "result": result,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    return {"status": "logged"}
+
+@api_router.get("/agents/{agent_id}/audit")
+async def get_agent_audit(agent_id: str, agent: Dict = Depends(_get_agent_from_key)):
+    if agent["id"] != agent_id:
+        raise HTTPException(403, "API Key does not match agent ID")
+
+    trail = await intent_logger.get_audit_trail(agent_id,
+                                               datetime.now(timezone.utc) - timedelta(days=30),
+                                               datetime.now(timezone.utc))
+    return [e.model_dump() for e in trail]
+
+@api_router.post("/agents/{agent_id}/slash")
+async def slash_agent_internal(agent_id: str, request: Request):
+    admin_key = request.headers.get("X-Avaira-Admin-Key")
+    if not AVAIRA_ADMIN_KEY or admin_key != AVAIRA_ADMIN_KEY:
+        raise HTTPException(401, "Unauthorized admin action")
+
+    body = await request.json()
+    result = await slash_engine.slash(agent_id, body.get("reason", "manual"), body.get("severity", "medium"))
+    return result.model_dump()
+
+@api_router.get("/agents/{agent_id}/slash-history")
+async def get_agent_slash_history(agent_id: str, agent: Dict = Depends(_get_agent_from_key)):
+    if agent["id"] != agent_id:
+        raise HTTPException(403, "API Key does not match agent ID")
+
+    slashes = await db.slash_events.find({"agent_id": agent_id}, {"_id": 0}).sort("timestamp", -1).to_list(100)
+    return slashes
+
+@api_router.post("/appeal/{slash_id}")
+async def appeal_slash(slash_id: str, body: Dict[str, Any]):
+    # In a real app we'd get agent_id from session or slash_id
+    slash = await db.slash_events.find_one({"id": slash_id})
+    if not slash: raise HTTPException(404, "Slash not found")
+
+    result = await slash_engine.appeal(slash["agent_id"], slash_id, body.get("evidence", ""))
+    return result.model_dump()
 
 @api_router.post("/agent/think")
 async def agent_think(body: AgentThinkRequest):
-    if not is_valid_evm_address(body.agent_address):
-        raise HTTPException(400, "Invalid agent wallet address")
+    # Backward compatibility or internal use
+    agent = await db.agents.find_one({"wallet_address": body.agent_address})
+    if not agent: raise HTTPException(404, "Agent not found")
 
-    agent = await _ensure_ai_agent_record(body)
-    runtime = AvairaAgent(body.agent_address, body.risk_envelope, body.mission_goal)
-    try:
-        intent = await runtime.think(body.market_context, body.history)
-    except Exception as exc:
-        raise HTTPException(502, f"Agent runtime failed: {exc}") from exc
-
-    validation = runtime.validate(intent)
-    score_payload = _normalize_score(agent)
-    execution = {
-        "id": str(uuid.uuid4()),
-        "agent_id": agent["id"],
-        "agent_name": agent["name"],
-        "action": intent.action,
-        "target_address": intent.target,
-        "value": intent.value_avax,
-        "status": "agent_approved" if validation["valid"] else "agent_rejected",
-        "reason": validation["reason"],
-        "intent": intent.model_dump(),
-        "source": "agent_think",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.executions.insert_one(execution)
-    return {
-        "status": "approved" if validation["valid"] else "rejected",
-        "intent": intent.model_dump(),
-        "reason": validation["reason"],
-        "avaira_score": score_payload,
-    }
+    real_agent = RealAvairaAgent(agent["id"], agent["risk_envelope"], db_client=db)
+    intent = await real_agent.think(body.mission_goal)
+    return intent.model_dump()
 
 
 @api_router.post("/agent/simulate-full-lifecycle")
@@ -2096,38 +2155,27 @@ async def agent_leaderboard():
 
 # ─── NEURAL INTENT VALIDATION ───────────────────────────────────
 class IntentValidateRequest(BaseModel):
-    agent_id: str
     intent: Dict[str, Any]
+    risk_envelope: Dict[str, Any]
 
-@api_router.post("/validate/intent")
+@api_router.post("/validate")
 async def validate_intent_endpoint(body: IntentValidateRequest, request: Request):
     """
-    Two-layer intent validation: LLM semantic check + deterministic rule check.
-    Falls back to rule-only if LLM is unavailable. Never returns 500 due to LLM failure.
+    Two-layer intent validation using AvairaValidator (Claude-powered).
     """
     await enforce_rate_limit(request, "validate_intent", limit=30, window_seconds=60)
-    agent = await db.agents.find_one({"id": body.agent_id}, {"_id": 0})
-    if not agent:
-        raise HTTPException(404, "Agent not found")
-
-    try:
-        from ai_validator import validate_intent_neural, IntentValidationResult
-        from openai import AsyncOpenAI as _AsyncOpenAI
-        _openai_key = os.environ.get("OPENAI_API_KEY", "")
-        _llm_client = _AsyncOpenAI(api_key=_openai_key) if _openai_key else None
-    except ImportError:
-        _llm_client = None
-        from ai_validator import validate_intent_neural
-
-    result = await validate_intent_neural(
-        agent_id=body.agent_id,
-        risk_envelope=agent.get("risk_envelope", {}),
-        execution_intent=body.intent,
-        llm_client=_llm_client,
-    )
+    result = await avaira_validator.validate(body.intent, body.risk_envelope)
     return result
 
 # ─── HEALTH ──────────────────────────────────────────────────────
+@api_router.get("/anchor-state")
+async def anchor_state_endpoint():
+    """
+    Internal cron endpoint for on-chain anchoring.
+    """
+    result = await reputation_engine.anchor_to_chain()
+    return result
+
 @api_router.get("/health")
 async def health_check():
     """Returns service health status for monitoring and CI smoke tests."""
