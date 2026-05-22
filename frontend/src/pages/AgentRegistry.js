@@ -54,12 +54,8 @@ const AgentCard = ({ agent, onRefresh, scores, canManage }) => {
       </div>
       <div className="space-y-2 font-mono text-xs">
         <div className="flex justify-between">
-          <span className="text-avaira-muted">WALLET</span>
-          <span className="text-foreground truncate ml-2 max-w-[140px]">{agent.wallet_address}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-avaira-muted">COLLATERAL</span>
-          <span className="text-avaira-primary">{agent.collateral_remaining.toFixed(4)} / {agent.collateral_amount.toFixed(4)}</span>
+          <span className="text-avaira-muted">API KEY</span>
+          <span className="text-foreground truncate ml-2 max-w-[140px]">********************</span>
         </div>
         <div className="flex justify-between">
           <span className="text-avaira-muted">REPUTATION</span>
@@ -73,7 +69,7 @@ const AgentCard = ({ agent, onRefresh, scores, canManage }) => {
         </div>
         <div className="flex justify-between">
           <span className="text-avaira-muted">MISSION</span>
-          <span className="text-foreground truncate ml-2 max-w-[180px]">{agent.mission_intent}</span>
+          <span className="text-foreground truncate ml-2 max-w-[180px]">{agent.goal}</span>
         </div>
       </div>
       <div className="mt-3 pt-3 border-t border-avaira-border flex items-center justify-between">
@@ -113,8 +109,9 @@ export default function AgentRegistry() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
-    name: "", wallet_address: "", collateral_amount: "1.0", mission_intent: "",
-    max_tx_value: "10.0", max_daily_txns: "50", allowed_actions: "transfer,swap,stake", max_slippage: "0.05"
+    name: "", goal: "", webhook_url: "",
+    max_spend_usd: "50.0", allowed_actions: "search,summarize,email",
+    require_human_approval_above_usd: "100.0"
   });
 
   const fetchAgents = useCallback(async () => {
@@ -137,28 +134,24 @@ export default function AgentRegistry() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.mission_intent.trim()) {
-      return toast.error("Name and mission intent are required");
-    }
-    if (parseFloat(form.collateral_amount) <= 0) {
-      return toast.error("Collateral must be greater than 0");
+    if (!form.name.trim() || !form.goal.trim()) {
+      return toast.error("Name and goal are required");
     }
     try {
-      await axios.post(`${API}/agents/register`, {
+      const resp = await axios.post(`${API}/agents/register`, {
         name: form.name,
-        wallet_address: form.wallet_address || "0x" + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join(''),
-        collateral_amount: parseFloat(form.collateral_amount),
-        mission_intent: form.mission_intent,
+        goal: form.goal,
+        webhook_url: form.webhook_url,
         risk_envelope: {
-          max_tx_value: parseFloat(form.max_tx_value),
-          max_daily_txns: parseInt(form.max_daily_txns),
+          max_spend_usd: parseFloat(form.max_spend_usd),
           allowed_actions: form.allowed_actions.split(",").map(s => s.trim()),
-          max_slippage: parseFloat(form.max_slippage)
+          require_human_approval_above_usd: parseFloat(form.require_human_approval_above_usd)
         }
       });
-      toast.success("Agent registered successfully");
+      toast.success("Agent registered successfully. API Key generated.");
+      console.log("API KEY:", resp.data.api_key); // In real app, show to user
       setOpen(false);
-      setForm({ name: "", wallet_address: "", collateral_amount: "1.0", mission_intent: "", max_tx_value: "10.0", max_daily_txns: "50", allowed_actions: "transfer,swap,stake", max_slippage: "0.05" });
+      setForm({ name: "", goal: "", webhook_url: "", max_spend_usd: "50.0", allowed_actions: "search,summarize,email", require_human_approval_above_usd: "100.0" });
       fetchAgents();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Registration failed");
@@ -203,21 +196,21 @@ export default function AgentRegistry() {
                 <DialogTitle className="font-heading font-bold text-lg text-foreground uppercase tracking-tight">Register New Agent</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleRegister} className="space-y-3 mt-2" data-testid="register-agent-form">
-                {renderInput("Agent Name", "name", "text", "TradingBot-Alpha")}
-                {renderInput("Wallet Address (optional)", "wallet_address", "text", "0x...")}
-                {renderInput("Collateral (AVAX)", "collateral_amount", "number", "1.0", "0.1")}
-                {renderInput("Mission Intent", "mission_intent", "text", "DeFi yield optimization")}
+                {renderInput("Agent Name", "name", "text", "ResearchBot")}
+                {renderInput("Primary Goal", "goal", "text", "Help with market research")}
+                {renderInput("Webhook URL (optional)", "webhook_url", "text", "https://yourapp.com/webhooks")}
                 <div className="border-t border-avaira-border pt-3">
                   <p className="font-heading font-semibold text-xs uppercase tracking-wider text-avaira-primary mb-2">Risk Envelope</p>
                   <div className="grid grid-cols-2 gap-3">
-                    {renderInput("Max TX Value", "max_tx_value", "number", "", "0")}
-                    {renderInput("Max Daily TXNs", "max_daily_txns", "number", "", "1")}
-                    {renderInput("Allowed Actions", "allowed_actions", "text", "transfer,swap,stake")}
-                    {renderInput("Max Slippage", "max_slippage", "number", "", "0")}
+                    {renderInput("Max Spend (USD)", "max_spend_usd", "number", "", "0")}
+                    {renderInput("Human Approval >", "require_human_approval_above_usd", "number", "", "0")}
+                    <div className="col-span-2">
+                      {renderInput("Allowed Actions (comma-sep)", "allowed_actions", "text", "search,email,summarize")}
+                    </div>
                   </div>
                 </div>
                 <button data-testid="submit-register-btn" type="submit" className="w-full cyber-btn bg-avaira-primary text-white py-2 font-heading text-sm mt-2">
-                  REGISTER & STAKE COLLATERAL
+                  REGISTER & GET API KEY
                 </button>
               </form>
             </DialogContent>

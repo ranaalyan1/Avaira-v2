@@ -33,6 +33,18 @@ services:
       - ./backend:/app
       - ./deployments:/app/deployments:ro
 
+  # Daily cron for optional on-chain anchoring
+  anchor-cron:
+    image: alpine:latest
+    depends_on:
+      - backend
+    command: >
+      sh -c "while true; do
+        wget -qO- http://backend:8001/api/anchor-state || true;
+        sleep 86400;
+      done"
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
@@ -46,16 +58,6 @@ services:
     depends_on:
       - backend
 
-  hardhat:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./contracts:/app
-    ports:
-      - "8545:8545"
-    command: sh -c "npm ci && npx hardhat node --hostname 0.0.0.0"
-    profiles:
-      - local
 
 volumes:
   mongo_data:

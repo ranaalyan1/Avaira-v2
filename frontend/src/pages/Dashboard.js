@@ -73,11 +73,7 @@ export default function Dashboard() {
       toast.success(`Simulation complete: ${res.data.steps.length} steps executed`);
       fetchData();
     } catch (e) {
-      if (e?.response?.status === 401 || e?.response?.status === 403) {
-        toast.error("Simulation requires an authenticated admin session");
-      } else {
-        toast.error("Simulation failed");
-      }
+      toast.error("Simulation failed. Check admin privileges.");
     }
     setSimulating(false);
   };
@@ -207,7 +203,7 @@ export default function Dashboard() {
                   <div key={d.name}>
                     <div className="flex justify-between font-mono text-xs mb-1">
                       <span className="text-avaira-muted">{d.name}</span>
-                      <span className="text-foreground">{d.value.toFixed(6)} AVAX</span>
+                      <span className="text-foreground">${d.value.toFixed(2)}</span>
                     </div>
                     <div className="h-1.5 bg-avaira-surface">
                       <div className="h-full transition-all duration-500" style={{

@@ -65,17 +65,16 @@ function ConfidenceBar({ value }) {
 export default function AgentDashboard() {
   const { leaderboard, loading, error } = useAgentLeaderboard();
   const [form, setForm] = useState({
-    agent_address: "0x1111111111111111111111111111111111111111",
-    mission_goal: "Monitor market conditions and rebalance AVAX exposure within the declared risk envelope.",
+    agent_id: "agent_123",
+    mission_goal: "Help users find the best travel deals within their budget and preferences.",
     risk_envelope: {
-      max_tx_value: 1.25,
-      max_slippage: 0.05,
-      allowed_actions: ["transfer", "swap", "stake"],
+      max_spend_usd: 100.0,
+      allowed_actions: ["search", "summarize", "email"],
     },
     market_context: {
-      target: "0x2222222222222222222222222222222222222222",
-      suggested_value_avax: 0.42,
-      market_signal: "moderately bullish",
+      target: "travel_apis",
+      suggested_value_usd: 42.0,
+      market_signal: "high season",
     },
     history: [],
   });
@@ -164,16 +163,16 @@ export default function AgentDashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
             <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-[0.22em]">
-              Agent Address
-              <input className="mt-1 w-full bg-avaira-surface border border-avaira-border px-3 py-2 text-xs text-foreground" value={form.agent_address} onChange={(e) => setForm((current) => ({ ...current, agent_address: e.target.value }))} />
+              Agent ID
+              <input className="mt-1 w-full bg-avaira-surface border border-avaira-border px-3 py-2 text-xs text-foreground" value={form.agent_id} onChange={(e) => setForm((current) => ({ ...current, agent_id: e.target.value }))} />
             </label>
             <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-[0.22em]">
               Mission Goal
               <input className="mt-1 w-full bg-avaira-surface border border-avaira-border px-3 py-2 text-xs text-foreground" value={form.mission_goal} onChange={(e) => setForm((current) => ({ ...current, mission_goal: e.target.value }))} />
             </label>
             <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-[0.22em]">
-              Max Tx Value (AVAX)
-              <input type="number" step="0.01" className="mt-1 w-full bg-avaira-surface border border-avaira-border px-3 py-2 text-xs text-foreground" value={form.risk_envelope.max_tx_value} onChange={(e) => setForm((current) => ({ ...current, risk_envelope: { ...current.risk_envelope, max_tx_value: Number(e.target.value) } }))} />
+              Max Spend (USD)
+              <input type="number" step="1" className="mt-1 w-full bg-avaira-surface border border-avaira-border px-3 py-2 text-xs text-foreground" value={form.risk_envelope.max_spend_usd} onChange={(e) => setForm((current) => ({ ...current, risk_envelope: { ...current.risk_envelope, max_spend_usd: Number(e.target.value) } }))} />
             </label>
             <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-[0.22em]">
               Allowed Actions
@@ -208,8 +207,8 @@ export default function AgentDashboard() {
                   <p className="font-mono text-xs text-foreground mt-1 break-all">{intentResult.intent.target}</p>
                 </div>
                 <div className="border border-avaira-border p-3 bg-avaira-surface/60">
-                  <p className="font-mono text-[10px] text-avaira-muted uppercase tracking-[0.22em]">Value</p>
-                  <p className="font-heading text-lg text-foreground mt-1">{intentResult.intent.value_avax} AVAX</p>
+                  <p className="font-mono text-[10px] text-avaira-muted uppercase tracking-[0.22em]">Estimated Value</p>
+                  <p className="font-heading text-lg text-foreground mt-1">${intentResult.intent.estimated_value} USD</p>
                 </div>
               </div>
               <div>
