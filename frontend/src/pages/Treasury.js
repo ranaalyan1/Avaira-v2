@@ -12,7 +12,7 @@ const CustomTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-avaira-card border border-avaira-border p-2 font-mono text-xs">
-        {payload.map((p, i) => <p key={i} style={{ color: p.color || p.fill }}>{p.name}: {typeof p.value === 'number' ? p.value.toFixed(6) : p.value} AVAX</p>)}
+        {payload.map((p, i) => <p key={i} style={{ color: p.color || p.fill }}>{p.name}: {typeof p.value === 'number' ? p.value.toFixed(2) : p.value} USD</p>)}
       </div>
     );
   }
@@ -86,7 +86,7 @@ export default function Treasury() {
               <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">Total Fees</span>
             </div>
             <p className="font-heading font-bold text-xl text-avaira-primary" data-testid="total-fees-value">{stats.total_fees.toFixed(6)}</p>
-            <p className="font-mono text-[10px] text-avaira-dim">AVAX</p>
+            <p className="font-mono text-[10px] text-avaira-dim">USD</p>
           </div>
           <div className="cyber-card p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -128,7 +128,7 @@ export default function Treasury() {
                     <Icon size={14} style={{ color: STREAM_COLORS[i] }} strokeWidth={1.5} />
                     <span className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest">{stream.name}</span>
                   </div>
-                  <p className="font-heading font-bold text-lg" style={{ color: STREAM_COLORS[i] }}>{stream.amount.toFixed(6)} AVAX</p>
+                  <p className="font-heading font-bold text-lg" style={{ color: STREAM_COLORS[i] }}>${stream.amount.toFixed(2)}</p>
                   <p className="font-mono text-[10px] text-avaira-dim mt-1">{stream.description}</p>
                   <p className="font-mono text-[10px] text-avaira-dim mt-0.5">{stream.transactions} events</p>
                 </div>
@@ -137,7 +137,7 @@ export default function Treasury() {
           </div>
           <div className="mt-3 p-3 border border-avaira-primary/20 bg-avaira-primary/5">
             <span className="font-mono text-xs text-avaira-muted">TOTAL PROTOCOL REVENUE: </span>
-            <span className="font-heading font-bold text-lg text-avaira-primary">{revenueStreams.total_revenue.toFixed(6)} AVAX</span>
+            <span className="font-heading font-bold text-lg text-avaira-primary">${revenueStreams.total_revenue.toFixed(2)}</span>
           </div>
         </div>
       )}
@@ -204,7 +204,7 @@ export default function Treasury() {
               {transactions.slice(0, 15).map(tx => (
                 <div key={tx.id} className="p-2 hover:bg-white/[0.02] border-b border-white/[0.04]" data-testid={`treasury-tx-${tx.id}`}>
                   <div className="flex justify-between font-mono text-xs">
-                    <span className="text-foreground">{tx.total_fee.toFixed(6)} AVAX</span>
+                    <span className="text-foreground">${tx.total_fee.toFixed(2)}</span>
                     <span className="text-avaira-dim">{new Date(tx.timestamp).toLocaleTimeString()}</span>
                   </div>
                   <div className="flex gap-4 mt-0.5 font-mono text-[10px]">

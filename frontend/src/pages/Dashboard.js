@@ -126,8 +126,8 @@ export default function Dashboard() {
           <StatCard icon={Activity} label="Active Agents" value={stats.active_agents} color="#39FF14" delay={2} />
           <StatCard icon={Zap} label="Executions" value={stats.total_executions} color="#7000FF" delay={3} />
           <StatCard icon={ShieldOff} label="Frozen" value={stats.frozen_agents} color="#FF003C" delay={4} />
-          <StatCard icon={Wallet} label="Total Fees" value={stats.total_fees_collected.toFixed(4)} color="#FFD300" delay={5} />
-          <StatCard icon={TrendingUp} label="Trust Pool" value={stats.trust_pool_balance.toFixed(4)} color="#00F0FF" delay={6} />
+          <StatCard icon={Wallet} label="Total Fees (USD)" value={stats.total_fees_collected.toFixed(2)} color="#FFD300" delay={5} />
+          <StatCard icon={TrendingUp} label="Trust Pool (USD)" value={stats.trust_pool_balance.toFixed(2)} color="#00F0FF" delay={6} />
         </div>
       )}
 

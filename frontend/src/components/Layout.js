@@ -12,19 +12,17 @@ const NAV_ITEMS = [
   { path: "/treasury", label: "TREASURY", icon: Wallet },
   { path: "/reputation", label: "REPUTATION", icon: TrendingUp },
   { path: "/sdk", label: "SDK DOCS", icon: BookOpen },
-  { path: "/contracts", label: "CONTRACTS", icon: Code },
 ];
 
 const PAGE_META = {
   "/dashboard": "Protocol telemetry and live state",
   "/agents": "Registration, risk envelopes, and status control",
-  "/executions": "Lifecycle traces and permit verification",
+  "/executions": "Lifecycle traces and trust verification",
   "/underwriters": "Mission markets and underwriting coverage",
   "/freeze": "Policy enforcement, freeze and slash actions",
   "/treasury": "Fee capture, split accounting, and treasury flow",
   "/reputation": "Score engine, rank movement, and trust data",
   "/sdk": "Developer integration docs and references",
-  "/contracts": "On-chain architecture and contract interfaces",
 };
 
 export default function Layout() {

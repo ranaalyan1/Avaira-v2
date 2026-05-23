@@ -107,13 +107,12 @@ class ReputationEngine:
             "recent_activity": recent_activity
         }
 
-    async def anchor_to_chain(self, chain: str = "avalanche") -> Dict[str, Any]:
-        # This would batch hashes and post to a contract
-        # For now, it's a simulated anchor
-        merkle_root = "0x" + os.urandom(32).hex()
+    async def anchor_state(self) -> Dict[str, Any]:
+        # Software-defined state anchoring (Chainless)
+        # In a real app, this could post to a centralized audit log or a distributed storage like IPFS
+        audit_hash = "sha256:" + os.urandom(32).hex()
         return {
             "status": "anchored",
-            "chain": chain,
-            "merkle_root": merkle_root,
-            "tx_hash": "0x" + os.urandom(32).hex()
+            "audit_hash": audit_hash,
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }

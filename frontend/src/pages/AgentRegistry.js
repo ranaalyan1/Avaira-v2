@@ -77,16 +77,6 @@ const AgentCard = ({ agent, onRefresh, scores, canManage }) => {
           {new Date(agent.registered_at).toLocaleDateString()}
         </span>
         <div className="flex items-center gap-3">
-          {agent.on_chain_tx && (
-            <a
-              href={`https://testnet.snowtrace.io/tx/${agent.on_chain_tx}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-[10px] text-avaira-primary hover:underline"
-            >
-              ON-CHAIN ->
-            </a>
-          )}
           <button
             data-testid={`toggle-status-${agent.id}`}
             onClick={handleToggleStatus}

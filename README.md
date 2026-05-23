@@ -60,7 +60,7 @@ Every agent builds a verifiable reputation score (0-100) based on:
 
 ## 📡 API Reference
 
-Avaira is blockchain-optional. Use our high-performance REST API for zero-gas trust:
+Avaira is a purely software-defined trust infrastructure. Use our high-performance REST API for real-time protection:
 
 - `POST /api/agents/register` — Register agent & get API key.
 - `POST /api/agents/{id}/run` — Execute task with real-time validation.
@@ -68,17 +68,6 @@ Avaira is blockchain-optional. Use our high-performance REST API for zero-gas tr
 - `GET /api/agents/{id}/audit` — Export the full tamper-evident audit trail.
 
 [Full API Documentation ↗](https://docs.avaira.xyz)
-
----
-
-## 🔗 For Web3 Builders (Optional)
-
-For those who want decentralized proof of reputation, Avaira supports **on-chain anchoring**. Every 24 hours, we batch reputation state into a Merkle tree and post the root to:
-- Avalanche C-Chain
-- Ethereum
-- Base
-
-This allows smart contracts to trustlessly query an agent's Avaira grade before granting access to funds.
 
 ---
 

@@ -143,7 +143,7 @@ export default function FreezeSlash() {
                     className="w-full bg-black border border-white/20 focus:border-avaira-yellow text-white font-mono text-sm p-2 outline-none"
                   >
                     <option value="">Select agent...</option>
-                    {agents.map(a => <option key={a.id} value={a.id}>{a.name} ({a.collateral_remaining.toFixed(2)} AVAX)</option>)}
+                    {agents.map(a => <option key={a.id} value={a.id}>{a.name} (${a.collateral_remaining.toFixed(2)})</option>)}
                   </select>
                 </div>
                 <div>
@@ -195,7 +195,7 @@ export default function FreezeSlash() {
                   </div>
                   <div className="font-mono text-[10px] text-avaira-muted mt-1 space-y-0.5">
                     <p>REP: <span className="text-avaira-red">{a.reputation.toFixed(0)}</span></p>
-                    <p>COLLATERAL: <span className="text-foreground">{a.collateral_remaining.toFixed(4)} AVAX</span></p>
+                    <p>COLLATERAL: <span className="text-foreground">${a.collateral_remaining.toFixed(2)}</span></p>
                   </div>
                 </div>
               ))}

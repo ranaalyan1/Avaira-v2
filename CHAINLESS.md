@@ -20,18 +20,11 @@ In Web3, "slashing" refers to the programmatic removal of crypto collateral. In 
 2.  **Reputation Layer:** A permanent, public "Slash Event" is recorded on the agent's audit trail, tanking its Avaira Score and preventing it from being hired by other enterprises.
 3.  **Financial Layer:** If the agent owner has a Stripe payment method on file, Avaira can charge a contractually agreed-upon penalty.
 
-## 3. When to Use On-Chain Anchoring
-
-Avaira remains "blockchain-optional." We provide an upgrade path for high-stakes Web3 agents:
-
-- **The Anchor:** Every 24 hours, Avaira computes a Merkle Root of all reputation data and posts it to the Avalanche C-Chain.
-- **Why do this?** This allows a DeFi protocol to verify—on-chain—that an agent has an "A+" rating before allowing it to manage a liquidity pool.
-
 ## Summary
 
-| Feature | Chainless (Standard) | On-Chain (Web3 Upgrade) |
-| :--- | :--- | :--- |
-| **Setup Time** | 3 lines of code | Wallet & Gas required |
-| **Latency** | <50ms | 1-2 seconds (finality) |
-| **Audit Trail** | Tamper-evident Hash Chain | Immutable Ledger |
-| **Target** | All AI Agents | DeFi & Web3 Agents |
+| Feature | Avaira (Software-Defined) |
+| :--- | :--- |
+| **Setup Time** | 3 lines of code |
+| **Latency** | <50ms |
+| **Audit Trail** | Tamper-evident Hash Chain |
+| **Enforcement** | API Freeze & Reputation Slashes |
