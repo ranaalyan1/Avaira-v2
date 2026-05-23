@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { API } from "@/lib/api";
 
-const STEP_ICONS = { request_submitted: Send, risk_validation: Shield, permit_signed: FileKey, permit_verified: CheckCircle, transaction_executed: Zap, fee_deducted: Clock };
+const STEP_ICONS = { request_submitted: Send, risk_validation: Shield, execution: Zap, fee_deducted: Clock };
 
 const TimelineStep = ({ step, isLast }) => {
   const Icon = STEP_ICONS[step.step] || Clock;
@@ -131,7 +131,7 @@ export default function ExecutionFlow() {
                   </select>
                 </div>
                 <div>
-                  <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Value (AVAX)</label>
+                  <label className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest block mb-1">Value (USD)</label>
                   <input
                     data-testid="exec-value-input"
                     type="number"
@@ -218,28 +218,6 @@ export default function ExecutionFlow() {
                   <TimelineStep key={i} step={step} isLast={i === selectedExec.lifecycle.length - 1} />
                 ))}
               </div>
-              {selectedExec.permit && (
-                <div className="mt-3 pt-3 border-t border-avaira-border">
-                  <p className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest mb-1">EIP-712 Permit</p>
-                  <div className="bg-black p-2 font-mono text-[10px] text-avaira-primary break-all max-h-32 overflow-y-auto">
-                    <p>SIG: {selectedExec.permit.signature}</p>
-                    <p className="text-avaira-muted mt-1">HASH: {selectedExec.permit.typedDataHash}</p>
-                  </div>
-                  {selectedExec.tx_hash && (
-                    <div className="mt-2 pt-2 border-t border-avaira-border">
-                      <p className="font-mono text-[10px] text-avaira-muted uppercase tracking-widest mb-1">On-Chain</p>
-                      <a
-                        href={`https://testnet.snowtrace.io/tx/${selectedExec.tx_hash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-mono text-[10px] text-avaira-primary hover:underline break-all"
-                      >
-                        {selectedExec.tx_hash.slice(0, 20)}... -> Snowtrace
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           ) : (
             <div className="text-center py-8">

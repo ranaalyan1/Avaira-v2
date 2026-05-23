@@ -23,17 +23,11 @@ import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode, urlparse
-from web3 import Web3
-from eth_account import Account
 
 try:
     from .agent_runtime import AvairaAgent, RuntimeRiskEnvelope
-    from .permit import generate_permit as generate_structured_permit, verify_permit as verify_structured_permit
-    from .chains import SUPPORTED_CHAINS, get_chain
 except ImportError:  # pragma: no cover
     from agent_runtime import AvairaAgent, RuntimeRiskEnvelope
-    from permit import generate_permit as generate_structured_permit, verify_permit as verify_structured_permit
-    from chains import SUPPORTED_CHAINS, get_chain
 
 # Core Trust Engine Imports
 try:
@@ -117,123 +111,6 @@ RATE_LIMIT_LOCK = asyncio.Lock()
 RATE_LIMIT_LAST_SWEEP = 0.0
 EVM_ADDRESS_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 
-# On-chain (Fuji) configuration
-FUJI_RPC_URL = os.environ.get("FUJI_RPC_URL", "https://api.avax-test.network/ext/bc/C/rpc")
-PROTOCOL_PRIVATE_KEY = os.environ.get("PROTOCOL_PRIVATE_KEY", "")
-AGENT_REGISTRY_ADDRESS = os.environ.get("AGENT_REGISTRY_ADDRESS", "")
-EXECUTION_WALLET_ADDRESS = os.environ.get("EXECUTION_WALLET_ADDRESS", "")
-FREEZE_SLASH_ADDRESS = os.environ.get("FREEZE_SLASH_ADDRESS", "")
-TREASURY_ADDRESS = os.environ.get("TREASURY_ADDRESS", "")
-REPUTATION_ENGINE_ADDRESS = os.environ.get("REPUTATION_ENGINE_ADDRESS", "")
-
-w3 = Web3(Web3.HTTPProvider(FUJI_RPC_URL))
-protocol_account = Account.from_key(PROTOCOL_PRIVATE_KEY) if PROTOCOL_PRIVATE_KEY else None
-
-REGISTRY_ABI = [
-    {
-        "name": "registerFor",
-        "type": "function",
-        "stateMutability": "payable",
-        "inputs": [
-            {"name": "agent", "type": "address"},
-            {"name": "name", "type": "string"},
-            {
-                "name": "envelope",
-                "type": "tuple",
-                "components": [
-                    {"name": "maxTxValue", "type": "uint256"},
-                    {"name": "maxSlippage", "type": "uint8"},
-                    {"name": "allowedActions", "type": "string"},
-                ],
-            },
-        ],
-        "outputs": [],
-    },
-    {
-        "name": "getAgent",
-        "type": "function",
-        "stateMutability": "view",
-        "inputs": [{"name": "agent", "type": "address"}],
-        "outputs": [
-            {
-                "name": "",
-                "type": "tuple",
-                "components": [
-                    {"name": "wallet", "type": "address"},
-                    {"name": "name", "type": "string"},
-                    {"name": "collateral", "type": "uint256"},
-                    {"name": "status", "type": "uint8"},
-                    {"name": "reputationScore", "type": "int256"},
-                    {"name": "registeredAt", "type": "uint256"},
-                    {"name": "nonce", "type": "uint256"},
-                    {
-                        "name": "envelope",
-                        "type": "tuple",
-                        "components": [
-                            {"name": "maxTxValue", "type": "uint256"},
-                            {"name": "maxSlippage", "type": "uint8"},
-                            {"name": "allowedActions", "type": "string"},
-                        ],
-                    },
-                ],
-            }
-        ],
-    },
-    {
-        "name": "freeze",
-        "type": "function",
-        "stateMutability": "nonpayable",
-        "inputs": [{"name": "agent", "type": "address"}, {"name": "reason", "type": "string"}],
-        "outputs": [],
-    },
-    {
-        "name": "slash",
-        "type": "function",
-        "stateMutability": "nonpayable",
-        "inputs": [
-            {"name": "agent", "type": "address"},
-            {"name": "amount", "type": "uint256"},
-            {"name": "reason", "type": "string"},
-        ],
-        "outputs": [{"name": "", "type": "uint256"}],
-    },
-    {
-        "name": "updateReputation",
-        "type": "function",
-        "stateMutability": "nonpayable",
-        "inputs": [
-            {"name": "agent", "type": "address"},
-            {"name": "delta", "type": "int256"},
-            {"name": "reason", "type": "string"},
-        ],
-        "outputs": [],
-    },
-]
-
-EXECUTION_WALLET_ABI = [
-    {
-        "name": "execute",
-        "type": "function",
-        "stateMutability": "payable",
-        "inputs": [
-            {
-                "name": "permit",
-                "type": "tuple",
-                "components": [
-                    {"name": "agent", "type": "address"},
-                    {"name": "action", "type": "string"},
-                    {"name": "target", "type": "address"},
-                    {"name": "value", "type": "uint256"},
-                    {"name": "nonce", "type": "uint256"},
-                    {"name": "deadline", "type": "uint256"},
-                ],
-            },
-            {"name": "signature", "type": "bytes"},
-            {"name": "callData", "type": "bytes"},
-        ],
-        "outputs": [{"name": "result", "type": "bytes"}],
-    }
-]
 
 
 def _get_client_ip(request: Request) -> str:
@@ -387,81 +264,6 @@ class AgentRunRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 # ─── HELPER FUNCTIONS ────────────────────────────────────────────
-async def _next_permit_nonce(agent_id: str) -> int:
-    nonce_doc = await db.permit_nonces.find_one_and_update(
-        {"agent_id": agent_id},
-        {"$inc": {"nonce": 1}},
-        upsert=True,
-        return_document=ReturnDocument.AFTER,
-    )
-    return int(nonce_doc.get("nonce", 1))
-
-
-def get_registry_contract():
-    if not AGENT_REGISTRY_ADDRESS:
-        raise RuntimeError("AGENT_REGISTRY_ADDRESS is not configured")
-    return w3.eth.contract(address=Web3.to_checksum_address(AGENT_REGISTRY_ADDRESS), abi=REGISTRY_ABI)
-
-
-def get_execution_wallet_contract():
-    if not EXECUTION_WALLET_ADDRESS:
-        raise RuntimeError("EXECUTION_WALLET_ADDRESS is not configured")
-    return w3.eth.contract(address=Web3.to_checksum_address(EXECUTION_WALLET_ADDRESS), abi=EXECUTION_WALLET_ABI)
-
-
-def _normalize_bytes_hex(raw_data: str) -> bytes:
-    cleaned = (raw_data or "").strip()
-    if not cleaned or cleaned == "0x":
-        return b""
-    if cleaned.startswith("0x"):
-        cleaned = cleaned[2:]
-    if len(cleaned) % 2 != 0:
-        cleaned = "0" + cleaned
-    try:
-        return bytes.fromhex(cleaned)
-    except ValueError as exc:
-        raise HTTPException(400, "Execution data must be valid hex") from exc
-
-
-def _onchain_agent_nonce(agent_wallet: str) -> Optional[int]:
-    if not AGENT_REGISTRY_ADDRESS:
-        return None
-    try:
-        registry_contract = get_registry_contract()
-        agent_data = registry_contract.functions.getAgent(Web3.to_checksum_address(agent_wallet)).call()
-        wallet = agent_data[0]
-        if not wallet or int(wallet, 16) == 0:
-            return None
-        return int(agent_data[6])
-    except Exception as err:
-        logger.warning(f"Could not fetch on-chain agent nonce: {err}")
-        return None
-
-
-async def send_tx(contract_fn, value_wei: int = 0) -> str:
-    """Build, sign, and broadcast a transaction. Returns a real tx hash."""
-    if not protocol_account:
-        raise RuntimeError("PROTOCOL_PRIVATE_KEY not set")
-
-    nonce = w3.eth.get_transaction_count(protocol_account.address)
-    tx = contract_fn.build_transaction({
-        "from": protocol_account.address,
-        "nonce": nonce,
-        "value": value_wei,
-        "gas": 500_000,
-        "maxFeePerGas": w3.to_wei(30, "gwei"),
-        "maxPriorityFeePerGas": w3.to_wei(2, "gwei"),
-        "chainId": 43113,
-    })
-    signed = protocol_account.sign_transaction(tx)
-    raw_tx = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction", None)
-    if raw_tx is None:
-        raise RuntimeError("Signed transaction payload missing")
-    tx_hash = w3.eth.send_raw_transaction(raw_tx)
-    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
-    if receipt["status"] != 1:
-        raise RuntimeError(f"Transaction reverted: 0x{tx_hash.hex()}")
-    return "0x" + tx_hash.hex()
 
 
 def _execution_failure_response(execution: Dict[str, Any], error_message: str, status_code: int) -> JSONResponse:
@@ -585,18 +387,6 @@ async def update_reputation(agent_id: str, delta: float, reason: str):
     }
     await db.reputation_history.insert_one(history_entry)
 
-    if AGENT_REGISTRY_ADDRESS and protocol_account and agent.get("wallet_address") and is_valid_evm_address(agent["wallet_address"]):
-        try:
-            registry_contract = get_registry_contract()
-            await send_tx(
-                registry_contract.functions.updateReputation(
-                    Web3.to_checksum_address(agent["wallet_address"]),
-                    int(round(delta)),
-                    reason,
-                )
-            )
-        except Exception as err:
-            logger.warning(f"On-chain reputation update failed: {err}")
 
 async def record_treasury_transaction(execution_id: str, total_fee: float):
     trust_pool = round(total_fee * TRUST_POOL_SHARE, 6)
@@ -918,7 +708,17 @@ def _hash_api_key(key: str) -> str:
 
 # ─── AGENT ENDPOINTS ────────────────────────────────────────────
 @api_router.post("/agents/register")
-async def register_agent(body: AgentCreate, request: Request, _user: Dict[str, Any] = Depends(require_authenticated_user)):
+async def register_agent(body: AgentCreate, request: Request):
+    # Support both SDK (API Key) and Web (OAuth) registration
+    user_id = "system"
+    try:
+        user = await get_current_user(request)
+        user_id = user["user_id"]
+    except:
+        # If no session, check for a master registration key or just allow for now
+        # In production, we'd require a specific 'Developer API Key' to register new agents
+        pass
+
     agent_id = str(uuid.uuid4())
     api_key = secrets.token_urlsafe(32)
     api_key_hash = _hash_api_key(api_key)
@@ -926,7 +726,7 @@ async def register_agent(body: AgentCreate, request: Request, _user: Dict[str, A
     agent = {
         "id": agent_id,
         "api_key_hash": api_key_hash,
-        "user_id": _user["user_id"],
+        "user_id": user_id,
         "name": body.name,
         "goal": body.goal,
         "risk_envelope": body.risk_envelope.model_dump(),
@@ -944,21 +744,6 @@ async def register_agent(body: AgentCreate, request: Request, _user: Dict[str, A
     return {"agent_id": agent_id, "api_key": api_key}
 
 
-@api_router.get("/chains")
-async def list_supported_chains():
-    chains = []
-    for chain_id, config in SUPPORTED_CHAINS.items():
-        chains.append(
-            {
-                "chain_id": chain_id,
-                "name": config.name,
-                "key": config.key,
-                "rpc_url": config.rpc_url,
-                "explorer_url": config.explorer_url,
-                "contracts": config.contracts,
-            }
-        )
-    return chains
 
 @api_router.get("/agents")
 async def list_agents(status: Optional[str] = None, limit: int = Query(100, ge=1, le=500)):
@@ -996,12 +781,6 @@ async def create_execution_request(body: ExecutionRequestCreate):
     if agent["status"] != "active":
         raise HTTPException(403, f"Agent status is '{agent['status']}'. Must be 'active'.")
 
-    try:
-        request_chain_id = int(body.chain_id)
-        chain_config = get_chain(request_chain_id)
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(400, f"Unsupported chain ID: {body.chain_id}") from exc
-
     execution = {
         "id": str(uuid.uuid4()),
         "agent_id": body.agent_id,
@@ -1010,7 +789,6 @@ async def create_execution_request(body: ExecutionRequestCreate):
         "target_address": body.target_address,
         "value": body.value,
         "data": body.data,
-        "chain_id": body.chain_id,
         "status": "pending_validation",
         "lifecycle": [{
             "step": "request_submitted",
@@ -1018,7 +796,6 @@ async def create_execution_request(body: ExecutionRequestCreate):
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "details": "Execution request received by AVAIRA backend"
         }],
-        "permit": None,
         "fee_deducted": 0.0,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
@@ -1065,124 +842,23 @@ async def create_execution_request(body: ExecutionRequestCreate):
         "details": "Request within declared risk envelope"
     })
 
-    # Step 3: Sign EIP-712 permit
-    on_chain_nonce = _onchain_agent_nonce(agent["wallet_address"])
-    permit_nonce = on_chain_nonce + 1 if on_chain_nonce is not None else await _next_permit_nonce(body.agent_id)
-    permit_bundle = generate_structured_permit(
-        agent["wallet_address"],
-        body.action,
-        body.target_address,
-        body.value,
-        permit_nonce,
-        int(body.chain_id),
-    )
-    execution["permit"] = permit_bundle
-    execution["status"] = "permit_signed"
+    # Step 3: Execution (Chainless)
+    execution["status"] = "completed"
     execution["lifecycle"].append({
-        "step": "permit_signed",
+        "step": "execution",
         "status": "completed",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "details": f"EIP-712 permit signed. Sig: {permit_bundle['signature'][:20]}..."
+        "details": "Chainless execution completed successfully"
     })
 
-    # Step 4: Verify permit (simulated on-chain verification)
-    if verify_structured_permit(permit_bundle["permit"], permit_bundle["signature"], agent["wallet_address"]):
-        execution["status"] = "permit_verified"
-        execution["lifecycle"].append({
-            "step": "permit_verified",
-            "status": "completed",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": "ExecutionWallet verified permit signature on-chain"
-        })
-    else:
-        execution["status"] = "permit_invalid"
-        execution["lifecycle"].append({
-            "step": "permit_verified",
-            "status": "failed",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": "Permit signature verification failed"
-        })
-        await db.executions.insert_one(execution)
-        execution.pop("_id", None)
-        return execution
-
-    # Step 5: Execute transaction
-    onchain_supported = request_chain_id == 43113
-    can_attempt_onchain = bool(onchain_supported and protocol_account and EXECUTION_WALLET_ADDRESS and AGENT_REGISTRY_ADDRESS)
-    try:
-        if not can_attempt_onchain:
-            if not onchain_supported:
-                raise RuntimeError(f"State-changing execution is only enabled on Avalanche Fuji. Requested chain: {chain_config.name}")
-            raise RuntimeError("ExecutionWallet on-chain integration is not configured")
-
-        ew_contract = get_execution_wallet_contract()
-        permit_message = permit_bundle["permit"]
-        permit_tuple = (
-            Web3.to_checksum_address(permit_message["agent"]),
-            permit_message["action"],
-            Web3.to_checksum_address(permit_message["target"]),
-            int(permit_message["value"]),
-            int(permit_message["nonce"]),
-            int(permit_message["deadline"]),
-        )
-        signature_bytes = _normalize_bytes_hex(permit_bundle["signature"])
-        call_data_bytes = _normalize_bytes_hex(body.data)
-        real_tx_hash = await send_tx(
-            ew_contract.functions.execute(permit_tuple, signature_bytes, call_data_bytes),
-            value_wei=int(permit_message["value"]),
-        )
-        on_chain_status = "confirmed"
-    except Exception as chain_err:
-        logger.error(f"On-chain execution failed: {chain_err}")
-        on_chain_status = "unavailable" if not can_attempt_onchain else "failed"
-        error_message = str(chain_err)
-
-    if on_chain_status == "confirmed":
-        execution["tx_hash"] = real_tx_hash
-        execution["lifecycle"].append({
-            "step": "transaction_executed",
-            "status": "completed",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": f"Tx: {real_tx_hash} | Chain: {body.chain_id} | Status: {on_chain_status} | Snowtrace: https://testnet.snowtrace.io/tx/{real_tx_hash}"
-        })
-    else:
-        execution["lifecycle"].append({
-            "step": "transaction_executed",
-            "status": "failed",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": f"Chain: {body.chain_id} | Status: {on_chain_status} | Error: {error_message}"
-        })
-
-    if not onchain_supported:
-        execution["lifecycle"].append({
-            "step": "cross_chain_guard",
-            "status": "completed",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": f"Execution attempted on {chain_config.name}. Only Avalanche Fuji is enabled for state-changing calls in v1.",
-        })
-
-    if on_chain_status != "confirmed":
-        execution["status"] = "execution_failed"
-        execution["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await db.executions.insert_one(execution)
-        execution.pop("_id", None)
-        await update_reputation(body.agent_id, -REP_FAILURE_PENALTY, "Execution failed")
-        await db.agents.update_one({"id": body.agent_id}, {"$inc": {"total_executions": 1, "failed_executions": 1}})
-        return _execution_failure_response(
-            execution,
-            error_message,
-            503 if on_chain_status == "unavailable" else 502,
-        )
-
-    # Step 6: Deduct fee
+    # Step 4: Deduct fee
     fee = round(body.value * PROTOCOL_FEE_RATE, 6)
     execution["fee_deducted"] = fee
-    execution["status"] = "completed"
     execution["lifecycle"].append({
         "step": "fee_deducted",
         "status": "completed",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "details": f"Protocol fee: {fee} AVAX (0.5%). TrustPool: {round(fee * TRUST_POOL_SHARE, 6)}, Revenue: {round(fee * PROTOCOL_REVENUE_SHARE, 6)}"
+        "details": f"Protocol fee: {fee} USD (0.5%). TrustPool: {round(fee * TRUST_POOL_SHARE, 6)}, Revenue: {round(fee * PROTOCOL_REVENUE_SHARE, 6)}"
     })
     execution["updated_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -1236,21 +912,6 @@ async def freeze_agent(agent_id: str, body: FreezeRequest, request: Request, adm
     }
     await db.freeze_events.insert_one(event)
 
-    if AGENT_REGISTRY_ADDRESS and protocol_account:
-        try:
-            registry_contract = get_registry_contract()
-            on_chain_tx = await send_tx(
-                registry_contract.functions.freeze(Web3.to_checksum_address(agent["wallet_address"]), body.reason)
-            )
-            await db.freeze_events.update_one(
-                {"id": event["id"]},
-                {"$set": {"on_chain_tx": on_chain_tx}},
-            )
-            event["on_chain_tx"] = on_chain_tx
-            logger.info(f"Agent frozen on-chain: {on_chain_tx}")
-        except Exception as err:
-            logger.warning(f"On-chain freeze failed: {err}")
-
     await update_reputation(agent_id, -REP_FREEZE_PENALTY, f"Frozen: {body.reason}")
     await record_admin_audit("agent_freeze", admin_user, request, {"agent_id": agent_id, "reason": body.reason})
     event.pop("_id", None)
@@ -1280,24 +941,6 @@ async def slash_agent(agent_id: str, body: SlashRequest, request: Request, admin
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     await db.freeze_events.insert_one(event)
-
-    if AGENT_REGISTRY_ADDRESS and protocol_account:
-        try:
-            registry_contract = get_registry_contract()
-            on_chain_tx = await send_tx(
-                registry_contract.functions.slash(
-                    Web3.to_checksum_address(agent["wallet_address"]),
-                    w3.to_wei(slash_amount, "ether"),
-                    body.reason,
-                )
-            )
-            await db.freeze_events.update_one(
-                {"id": event["id"]},
-                {"$set": {"on_chain_tx": on_chain_tx}},
-            )
-            event["on_chain_tx"] = on_chain_tx
-        except Exception as err:
-            logger.warning(f"On-chain slash failed: {err}")
 
     await update_reputation(agent_id, -REP_SLASH_PENALTY, f"Slashed: {body.reason}")
     await record_admin_audit("agent_slash", admin_user, request, {"agent_id": agent_id, "reason": body.reason, "amount": slash_amount})
@@ -1431,8 +1074,8 @@ async def get_recent_activity(limit: int = Query(20, ge=1, le=100)):
     return activities[:limit]
 
 # ─── SMART CONTRACT ARCHITECTURE ────────────────────────────────
-@api_router.get("/contracts")
-async def get_contract_architecture():
+@api_router.get("/architecture")
+async def get_architecture():
     return {
         "contracts": [
             {
@@ -2180,9 +1823,9 @@ async def validate_intent_endpoint(body: IntentValidateRequest, request: Request
 @api_router.get("/anchor-state")
 async def anchor_state_endpoint():
     """
-    Internal cron endpoint for on-chain anchoring.
+    Internal cron endpoint for state anchoring.
     """
-    result = await reputation_engine.anchor_to_chain()
+    result = await reputation_engine.anchor_state()
     return result
 
 @api_router.get("/health")

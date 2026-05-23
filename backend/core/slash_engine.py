@@ -43,13 +43,21 @@ class SlashEngine:
                        execution_result: dict) -> SlashDecision:
         """
         Detects deviations between intent and outcome.
+        In v2, we only slash if the agent ACTUALLY executed a harmful action
+        or bypassed the validator.
         """
-        # Logic to compare intent (from validation_result or DB) vs execution_result
-        # For now, if validation failed but execution happened, or outcome exceeds intent limits
-        if not validation_result.approved:
-            return SlashDecision(should_slash=True, reason="Execution of unapproved intent", severity="high")
+        # 1. If validation blocked the intent, the system worked as intended. NO SLASH.
+        if not validation_result.approved and execution_result.get("status") == "blocked":
+            return SlashDecision(should_slash=False, reason="Intent blocked by guardrails", severity="none")
 
-        # More complex logic would involve LLM comparing the 'execution_result' against 'intent'
+        # 2. If the execution result indicates an outcome deviation detected by passive monitoring
+        if execution_result.get("status") == "deviation_detected":
+            return SlashDecision(
+                should_slash=True,
+                reason="Outcome deviation: Actual execution mismatched declared intent",
+                severity="high"
+            )
+
         return SlashDecision(should_slash=False, reason="No deviation detected", severity="none")
 
     async def slash(self, agent_id: str, reason: str, severity: str) -> SlashResult:

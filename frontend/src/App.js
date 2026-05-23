@@ -12,7 +12,6 @@ import ExecutionFlow from "@/pages/ExecutionFlow";
 import FreezeSlash from "@/pages/FreezeSlash";
 import Treasury from "@/pages/Treasury";
 import Reputation from "@/pages/Reputation";
-import SmartContracts from "@/pages/SmartContracts";
 import Underwriters from "@/pages/Underwriters";
 import SDKDocs from "@/pages/SDKDocs";
 import { Toaster } from "sonner";
@@ -53,7 +52,6 @@ function AppRoutes() {
           <Route path="/reputation" element={<Reputation />} />
           <Route path="/underwriters" element={<Underwriters />} />
           <Route path="/sdk" element={<SDKDocs />} />
-          <Route path="/contracts" element={<SmartContracts />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
