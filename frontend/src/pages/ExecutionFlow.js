@@ -218,6 +218,20 @@ export default function ExecutionFlow() {
                   <TimelineStep key={i} step={step} isLast={i === selectedExec.lifecycle.length - 1} />
                 ))}
               </div>
+
+              {selectedExec.status === "blocked" && (
+                <div className="mt-4 p-3 border border-red-500/50 bg-red-500/10 animate-pulse">
+                  <p className="font-heading font-bold text-xs text-red-400 uppercase flex items-center gap-2">
+                    <Shield size={14} /> Execution Shield Intercept
+                  </p>
+                  <p className="font-mono text-[11px] text-red-200 mt-2">
+                    REASON: {selectedExec.reason || "Rule violation detected by OPA/SLM"}
+                  </p>
+                  <p className="font-mono text-[9px] text-red-400/70 mt-1 uppercase">
+                    Deterministic Math > LLM Probabilities
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8">

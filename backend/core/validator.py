@@ -2,8 +2,10 @@ import json
 import time
 import anthropic
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
+from .shield_slm import ShieldSLM
+from .shield_rules import ShieldRules
 
 class ValidationResult(BaseModel):
     approved: bool
@@ -58,7 +60,9 @@ class AvairaValidator:
     def __init__(self):
         self.api_key = os.environ.get("ANTHROPIC_API_KEY")
         self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
-        self.model = "claude-3-5-haiku-20241022"
+        self.model = "claude-3-5-sonnet-20241022"
+        self.slm = ShieldSLM()
+        self.rules = ShieldRules()
 
     def _extract_json(self, text: str) -> dict:
         """Robustly extract JSON from LLM response."""
@@ -79,8 +83,28 @@ class AvairaValidator:
     async def validate(self, intent: dict, risk_envelope: dict) -> ValidationResult:
         start_time = time.time()
 
+        # --- NEW: EXECUTION SHIELD PIPELINE ---
+
+        # 1. Local SLM Intercept (Sub-50ms)
+        slm_result = await self.slm.classify_intent(intent)
+
+        # 2. Deterministic Rules Engine (OPA)
+        opa_result = await self.rules.evaluate(intent, risk_envelope)
+
+        # If OPA blocks, we stop immediately.
+        if not opa_result.allow:
+            return ValidationResult(
+                approved=False,
+                risk_score=1.0,
+                violations=opa_result.violations,
+                compliance_reasoning="Blocked by deterministic rules engine (OPA).",
+                adversarial_findings=slm_result.reasoning,
+                latency_ms=int((time.time() - start_time) * 1000),
+                validator_version="shield-v2"
+            )
+
         try:
-            # PASS 1: Compliance
+            # PASS 1: Compliance (Neural Audit)
             compliance_resp = await self.client.messages.create(
                 model=self.model,
                 max_tokens=1000,
