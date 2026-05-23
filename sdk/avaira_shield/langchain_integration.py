@@ -3,7 +3,8 @@ from typing import Any, Optional
 try:
     from langchain_core.tools import BaseTool
 except ImportError:
-    class BaseTool: pass # Placeholder
+    class BaseTool:
+        def __init__(self, **kwargs): pass
 
 from .client import AvairaClient
 
@@ -13,6 +14,11 @@ class AvairaBlockedError(Exception):
 class AvairaProtectedTool(BaseTool):
     wrapped_tool: Any
     avaira: AvairaClient
+
+    def __init__(self, wrapped_tool: Any, avaira: AvairaClient, **kwargs: Any):
+        super().__init__(**kwargs)
+        self.wrapped_tool = wrapped_tool
+        self.avaira = avaira
 
     def _run(self, *args: Any, **kwargs: Any) -> Any:
         intent = {

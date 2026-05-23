@@ -124,7 +124,10 @@ class SlashEngine:
 
     async def appeal(self, agent_id: str, slash_id: str, evidence: str) -> AppealResult:
         prompt = f"Evaluate this appeal for slash {slash_id}. Agent {agent_id} claims: {evidence}. Should we uphold the appeal?"
-        resp = self.anthropic_client.messages.create(
+
+        # Use AsyncAnthropic to prevent event loop blocking
+        async_client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        resp = await async_client.messages.create(
             model="claude-3-5-haiku-20241022",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}]

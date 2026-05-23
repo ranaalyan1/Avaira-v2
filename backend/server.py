@@ -35,12 +35,14 @@ try:
     from core.validator import AvairaValidator
     from core.slash_engine import SlashEngine
     from core.reputation import ReputationEngine
+    from core.agent_vault import AgentVault
     from agents.avaira_agent import AvairaAgent as RealAvairaAgent
 except ImportError:
     from .core.intent_logger import IntentLogger
     from .core.validator import AvairaValidator
     from .core.slash_engine import SlashEngine
     from .core.reputation import ReputationEngine
+    from .core.agent_vault import AgentVault
     from .agents.avaira_agent import AvairaAgent as RealAvairaAgent
 
 ROOT_DIR = Path(__file__).parent
@@ -65,6 +67,7 @@ intent_logger = IntentLogger(db_client=db)
 avaira_validator = AvairaValidator()
 slash_engine = SlashEngine(db_client=db)
 reputation_engine = ReputationEngine(db_client=db)
+agent_vault = AgentVault()
 
 # ─── PROTOCOL CONSTANTS ─────────────────────────────────────────
 PROTOCOL_FEE_RATE = 0.005  # 0.5%
@@ -723,6 +726,9 @@ async def register_agent(body: AgentCreate, request: Request):
     api_key = secrets.token_urlsafe(32)
     api_key_hash = _hash_api_key(api_key)
 
+    # Generate Virtual Vault Card for Chainless Spend
+    vault_card = await agent_vault.generate_virtual_card(agent_id, body.risk_envelope.max_spend_usd)
+
     agent = {
         "id": agent_id,
         "api_key_hash": api_key_hash,
@@ -730,6 +736,7 @@ async def register_agent(body: AgentCreate, request: Request):
         "name": body.name,
         "goal": body.goal,
         "risk_envelope": body.risk_envelope.model_dump(),
+        "vault_card": vault_card.model_dump(),
         "webhook_url": body.webhook_url,
         "status": "active",
         "reputation": INITIAL_REPUTATION,
@@ -1618,7 +1625,9 @@ async def appeal_slash(slash_id: str, body: Dict[str, Any]):
 @api_router.post("/agent/think")
 async def agent_think(body: AgentThinkRequest):
     # Backward compatibility or internal use
-    agent = await db.agents.find_one({"wallet_address": body.agent_address})
+    agent = await db.agents.find_one({"id": body.agent_address})
+    if not agent:
+        agent = await db.agents.find_one({"wallet_address": body.agent_address})
     if not agent: raise HTTPException(404, "Agent not found")
 
     real_agent = RealAvairaAgent(agent["id"], agent["risk_envelope"], db_client=db)

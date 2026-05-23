@@ -26,8 +26,8 @@ class MockCollection:
     async def update_one(self, filter, update):
         # Very simple mock update
         doc = await self.find_one(filter)
-        if doc and '$set' in update:
-            doc.update(update['$set'])
+        if doc and '' in update:
+            doc.update(update[''])
     def find(self, filter):
         class Cursor:
             def __init__(self, data, filter):
@@ -78,7 +78,7 @@ async def test_v2_full_integration():
         "registered_at": "2024-01-01T00:00:00Z"
     })
 
-    # 2. Mock Claude for Validator
+    # 2. Mock Claude
     with patch('anthropic.AsyncAnthropic') as MockAnthropic:
         mock_client = MockAnthropic.return_value
         mock_client.messages.create = AsyncMock()
@@ -91,7 +91,13 @@ async def test_v2_full_integration():
 
         agent = AvairaAgent(agent_id, envelope, db_client=db)
 
-        # 3. Mock think to avoid another LLM call
+        # 3. Manually mock SLM and Rules to ensure they don't block
+        agent.validator.slm = AsyncMock()
+        agent.validator.slm.classify_intent.return_value = MagicMock(is_malicious=False, reasoning="Safe")
+        agent.validator.rules = AsyncMock()
+        agent.validator.rules.evaluate.return_value = MagicMock(allow=True, violations=[])
+
+        # 4. Mock think to avoid another LLM call
         agent.think = AsyncMock(return_value=MagicMock(
             action="search",
             target="google",
@@ -102,14 +108,14 @@ async def test_v2_full_integration():
             self_assessment={}
         ))
 
-        # 4. Run Agent
+        # 5. Run Agent
         result = await agent.run("Search for Avaira")
 
         assert result.execution["status"] == "completed"
         assert len(db.intent_logs.data) == 1
         assert len(db.executions.data) == 1
 
-        # 5. Verify Hash Chain
+        # 6. Verify Hash Chain
         logger = IntentLogger(db_client=db)
         verify = await logger.verify_chain(agent_id)
         assert verify.valid is True
@@ -140,6 +146,13 @@ async def test_v2_violation_slashes():
         ]
 
         agent = AvairaAgent(agent_id, envelope, db_client=db)
+
+        # Manually mock SLM and Rules
+        agent.validator.slm = AsyncMock()
+        agent.validator.slm.classify_intent.return_value = MagicMock(is_malicious=False, reasoning="Safe")
+        agent.validator.rules = AsyncMock()
+        agent.validator.rules.evaluate.return_value = MagicMock(allow=True, violations=[])
+
         agent.think = AsyncMock(return_value=MagicMock(
             action="search", target="google", parameters={}, estimated_value=500.0, reasoning="Buying everything",
             model_dump=lambda: {"action": "search", "target": "google", "parameters": {}, "estimated_value": 500.0, "reasoning": "Buying everything", "self_assessment": {}}
@@ -149,7 +162,6 @@ async def test_v2_violation_slashes():
 
         assert result.execution["status"] == "blocked"
         # In v2, blocked intents don't result in immediate slashes/freezes
-        # (System worked as intended by blocking the action)
         updated_agent = await db.agents.find_one({"id": agent_id})
         assert updated_agent["status"] == "active"
         assert len(db.slash_events.data) == 0

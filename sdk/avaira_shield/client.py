@@ -23,8 +23,6 @@ class AvairaClient:
         return data["agent_id"]
 
     async def run(self, task: str, execute_fn: Callable) -> Dict[str, Any]:
-        # 1. Generate intent from task (Simplified: assume execute_fn provides intent or we derive it)
-        # In real SDK, we might call backend to 'think' or do it locally
         intent = {
             "action": "execute_task",
             "task": task,
@@ -32,7 +30,6 @@ class AvairaClient:
             "estimated_value": 0.0
         }
 
-        # 2. Validate
         validation = await self.validate(intent)
 
         if not validation["approved"] and self.config.strict_mode:
@@ -42,7 +39,6 @@ class AvairaClient:
                 "reasoning": validation["compliance_reasoning"]
             }
 
-        # 3. Execute
         try:
             result = await execute_fn() if asyncio.iscoroutinefunction(execute_fn) else execute_fn()
             status = "completed"
@@ -50,7 +46,6 @@ class AvairaClient:
             result = str(e)
             status = "failed"
 
-        # 4. Log outcome (POST /api/agents/{id}/log)
         await self.http_client.post(f"/api/agents/{self.config.agent_id}/log",
             json={"intent": intent, "status": status, "result": result},
             headers={"X-Avaira-API-Key": self.config.api_key}
@@ -74,3 +69,6 @@ class AvairaClient:
         resp = await self.http_client.get(f"/api/agents/{self.config.agent_id}/score")
         resp.raise_for_status()
         return resp.json()
+
+ShieldClient = AvairaClient
+ShieldConfig = AvairaConfig

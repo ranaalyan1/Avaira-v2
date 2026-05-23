@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
+import asyncio
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -24,6 +25,8 @@ class VerifyResult(BaseModel):
     broken_at: Optional[str] = None
 
 class IntentLogger:
+    _locks: Dict[str, asyncio.Lock] = {}
+
     def __init__(self, db_client=None):
         if db_client is None:
             mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
@@ -44,42 +47,46 @@ class IntentLogger:
         self.aesgcm = AESGCM(self.key)
 
     async def log(self, intent: dict, agent_id: str, risk_envelope: dict) -> LogEntry:
-        # Get last entry for hash chain
-        last_entry = await self.collection.find_one(
-            {"agent_id": agent_id},
-            sort=[("timestamp", -1)]
-        )
-        prev_hash = last_entry["intent_hash"] if last_entry else "0" * 64
+        if agent_id not in self._locks:
+            self._locks[agent_id] = asyncio.Lock()
 
-        timestamp = datetime.now(timezone.utc).isoformat()
-        risk_envelope_hash = hashlib.sha256(json.dumps(risk_envelope, sort_keys=True).encode()).hexdigest()
+        async with self._locks[agent_id]:
+            # Get last entry for hash chain
+            last_entry = await self.collection.find_one(
+                {"agent_id": agent_id},
+                sort=[("timestamp", -1)]
+            )
+            prev_hash = last_entry["intent_hash"] if last_entry else "0" * 64
 
-        intent_json = json.dumps(intent, sort_keys=True)
-        content_to_hash = (
-            intent_json +
-            agent_id +
-            timestamp +
-            risk_envelope_hash +
-            prev_hash
-        )
-        intent_hash = hashlib.sha256(content_to_hash.encode()).hexdigest()
+            timestamp = datetime.now(timezone.utc).isoformat()
+            risk_envelope_hash = hashlib.sha256(json.dumps(risk_envelope, sort_keys=True).encode()).hexdigest()
 
-        # Encrypt payload
-        nonce = os.urandom(12)
-        encrypted_payload = self.aesgcm.encrypt(nonce, intent_json.encode(), None)
+            intent_json = json.dumps(intent, sort_keys=True)
+            content_to_hash = (
+                intent_json +
+                agent_id +
+                timestamp +
+                risk_envelope_hash +
+                prev_hash
+            )
+            intent_hash = hashlib.sha256(content_to_hash.encode()).hexdigest()
 
-        entry = LogEntry(
-            agent_id=agent_id,
-            timestamp=timestamp,
-            intent_hash=intent_hash,
-            risk_envelope_hash=risk_envelope_hash,
-            prev_hash=prev_hash,
-            payload=encrypted_payload.hex(),
-            nonce=nonce.hex()
-        )
+            # Encrypt payload
+            nonce = os.urandom(12)
+            encrypted_payload = self.aesgcm.encrypt(nonce, intent_json.encode(), None)
 
-        await self.collection.insert_one(entry.model_dump())
-        return entry
+            entry = LogEntry(
+                agent_id=agent_id,
+                timestamp=timestamp,
+                intent_hash=intent_hash,
+                risk_envelope_hash=risk_envelope_hash,
+                prev_hash=prev_hash,
+                payload=encrypted_payload.hex(),
+                nonce=nonce.hex()
+            )
+
+            await self.collection.insert_one(entry.model_dump())
+            return entry
 
     async def verify_chain(self, agent_id: str) -> VerifyResult:
         entries = await self.collection.find(

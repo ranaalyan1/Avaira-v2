@@ -18,6 +18,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # In production, this container runs inside an AWS Nitro Enclave for TEE proof-of-execution
+    security_opt:
+      - "no-new-privileges:true"
     restart: unless-stopped
     ports:
       - "8001:8001"
