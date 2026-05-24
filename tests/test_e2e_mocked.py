@@ -36,7 +36,7 @@ async def test_e2e_pivot_flow_mocked():
 
         # 1. Register
         body = AgentCreate(name="Bot", goal="Test", risk_envelope=RiskEnvelope(max_spend_usd=100))
-        reg_res = await register_agent(body, None, {"user_id": "u1"})
+        reg_res = await register_agent(body, MagicMock())
         agent_id = reg_res["agent_id"]
         api_key = reg_res["api_key"]
 

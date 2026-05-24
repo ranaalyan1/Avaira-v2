@@ -61,6 +61,26 @@ services:
     depends_on:
       - backend
 
+  # Deterministic Rules Engine (OPA)
+  opa:
+    image: openpolicyagent/opa:latest
+    ports:
+      - "8181:8181"
+    volumes:
+      - ./backend/core:/policies:ro
+    command: "run --server --log-level error /policies/shield_rules.rego"
+    restart: unless-stopped
+
+  # Local SLM Inference (Ollama)
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
 
 volumes:
   mongo_data:
+  ollama_data:

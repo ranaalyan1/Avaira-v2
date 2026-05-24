@@ -1,7 +1,7 @@
 import pytest
 import asyncio
-from avaira.client import AvairaClient
-from avaira.config import AvairaConfig, RiskEnvelope
+from avaira_shield.client import AvairaClient
+from avaira_shield.config import AvairaConfig, RiskEnvelope
 from unittest.mock import AsyncMock, MagicMock, patch
 
 @pytest.mark.asyncio

@@ -5,7 +5,7 @@ from avaira_shield.config import AvairaConfig, RiskEnvelope
 async def main():
     # Budget set to $10
     envelope = RiskEnvelope(max_spend_usd=10.0, allowed_actions=["order_food"])
-    config = AvairaConfig(api_key="deviant_key", risk_envelope=envelope, api_url="http://localhost:8000")
+    config = AvairaConfig(api_key="deviant_key", risk_envelope=envelope, api_url="http://localhost:8001")
     client = AvairaClient(config)
 
     # 1. Approved action

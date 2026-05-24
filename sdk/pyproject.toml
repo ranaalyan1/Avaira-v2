@@ -1,5 +1,5 @@
 [project]
-name = "avaira-shield"
+name = "avaira-shield-sdk"
 version = "0.1.0"
 description = "Trust and accountability infrastructure for AI agents"
 readme = "README.md"

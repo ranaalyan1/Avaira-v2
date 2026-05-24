@@ -19,7 +19,7 @@ class MockAgentExecutor:
 
 async def main():
     envelope = RiskEnvelope(allowed_actions=["duckduckgo_search"])
-    config = AvairaConfig(api_key="lang_key", risk_envelope=envelope, api_url="http://localhost:8000")
+    config = AvairaConfig(api_key="lang_key", risk_envelope=envelope, api_url="http://localhost:8001")
     client = AvairaClient(config)
 
     executor = MockAgentExecutor([MockSearchTool()])
