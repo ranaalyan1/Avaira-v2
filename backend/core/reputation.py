@@ -67,13 +67,14 @@ class ReputationEngine:
         # Placeholder
         appeal_score = 100.0
 
+        # Avaira Score v2 - High Assurance Formula
         composite = (
-            success_rate * 0.30 +
-            consistency * 0.20 +
-            slash_score * 0.20 +
-            volume_score * 0.15 +
-            age_score * 0.10 +
-            appeal_score * 0.05
+            success_rate * 0.40 +    # Critical: Performance
+            slash_score * 0.30 +     # Critical: Safety
+            consistency * 0.10 +     # Behavioral alignment
+            volume_score * 0.10 +    # Economic throughput
+            age_score * 0.05 +       # Reliability over time
+            appeal_score * 0.05      # Resolution capability
         )
 
         grade = "D"

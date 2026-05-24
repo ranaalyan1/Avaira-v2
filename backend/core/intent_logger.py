@@ -2,11 +2,12 @@ import json
 import hashlib
 import uuid
 import os
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
-import asyncio
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.asymmetric import ed25519
 from motor.motor_asyncio import AsyncIOMotorClient
 
 class LogEntry(BaseModel):
@@ -14,10 +15,16 @@ class LogEntry(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     agent_id: str
     intent_hash: str
-    risk_envelope_hash: str
+    merkle_root: Optional[str] = None
     prev_hash: Optional[str] = None
     payload: str  # Encrypted intent hex
     nonce: str    # AESGCM nonce hex
+    signature: Optional[str] = None
+
+class MerkleProof(BaseModel):
+    entry_id: str
+    root: str
+    proof: List[str]
 
 class VerifyResult(BaseModel):
     valid: bool
@@ -38,20 +45,33 @@ class IntentLogger:
 
         self.collection = self.db.intent_logs
         self.secret = os.environ.get("AVAIRA_LOG_SECRET", "default_secret_32_bytes_long_!!!!!")
-        if len(self.secret) < 32:
-             # Pad or hash to get 32 bytes
-             self.key = hashlib.sha256(self.secret.encode()).digest()
-        else:
-             self.key = self.secret.encode()[:32]
-
+        self.key = hashlib.sha256(self.secret.encode()).digest()
         self.aesgcm = AESGCM(self.key)
+
+    def _get_agent_signing_key(self, agent_id: str) -> ed25519.Ed25519PrivateKey:
+        # In a real app, load from secure storage (Vault/KMS)
+        # For demo, derive deterministically from agent_id + global secret
+        seed = hashlib.sha256((agent_id + self.secret).encode()).digest()
+        return ed25519.Ed25519PrivateKey.from_private_bytes(seed)
+
+    def _compute_merkle_root(self, hashes: List[str]) -> str:
+        if not hashes: return "0" * 64
+        if len(hashes) == 1: return hashes[0]
+
+        new_hashes = []
+        for i in range(0, len(hashes), 2):
+            left = hashes[i]
+            right = hashes[i+1] if i+1 < len(hashes) else hashes[i]
+            combined = hashlib.sha256((left + right).encode()).hexdigest()
+            new_hashes.append(combined)
+
+        return self._compute_merkle_root(new_hashes)
 
     async def log(self, intent: dict, agent_id: str, risk_envelope: dict) -> LogEntry:
         if agent_id not in self._locks:
             self._locks[agent_id] = asyncio.Lock()
 
         async with self._locks[agent_id]:
-            # Get last entry for hash chain
             last_entry = await self.collection.find_one(
                 {"agent_id": agent_id},
                 sort=[("timestamp", -1)]
@@ -59,87 +79,74 @@ class IntentLogger:
             prev_hash = last_entry["intent_hash"] if last_entry else "0" * 64
 
             timestamp = datetime.now(timezone.utc).isoformat()
-            risk_envelope_hash = hashlib.sha256(json.dumps(risk_envelope, sort_keys=True).encode()).hexdigest()
-
             intent_json = json.dumps(intent, sort_keys=True)
-            content_to_hash = (
-                intent_json +
-                agent_id +
-                timestamp +
-                risk_envelope_hash +
-                prev_hash
-            )
+
+            # Content Hash
+            content_to_hash = (intent_json + agent_id + timestamp + prev_hash)
             intent_hash = hashlib.sha256(content_to_hash.encode()).hexdigest()
 
-            # Encrypt payload
+            # Signing
+            sk = self._get_agent_signing_key(agent_id)
+            signature = sk.sign(intent_hash.encode()).hex()
+
+            # Encrypt
             nonce = os.urandom(12)
             encrypted_payload = self.aesgcm.encrypt(nonce, intent_json.encode(), None)
+
+            # Merkle logic (local tree for this batch/history)
+            # In a real system, we'd batch multiple entries into a root.
+            # Here we just compute root of [prev, current] as a link.
+            merkle_root = self._compute_merkle_root([prev_hash, intent_hash])
 
             entry = LogEntry(
                 agent_id=agent_id,
                 timestamp=timestamp,
                 intent_hash=intent_hash,
-                risk_envelope_hash=risk_envelope_hash,
+                merkle_root=merkle_root,
                 prev_hash=prev_hash,
                 payload=encrypted_payload.hex(),
-                nonce=nonce.hex()
+                nonce=nonce.hex(),
+                signature=signature
             )
 
             await self.collection.insert_one(entry.model_dump())
             return entry
 
     async def verify_chain(self, agent_id: str) -> VerifyResult:
-        entries = await self.collection.find(
-            {"agent_id": agent_id}
-        ).sort("timestamp", 1).to_list(None)
+        cursor = self.collection.find({"agent_id": agent_id}).sort("timestamp", 1)
+        expected_prev = "0" * 64
+        pk = self._get_agent_signing_key(agent_id).public_key()
+        count = 0
 
-        if not entries:
-            return VerifyResult(valid=True, entries=0)
+        async for entry in cursor:
+            count += 1
+            # 1. Check prev link
+            if entry["prev_hash"] != expected_prev:
+                return VerifyResult(valid=False, entries=count, broken_at=entry["id"])
 
-        expected_prev_hash = "0" * 64
-        for entry in entries:
-            # 1. Verify chain link
-            if entry["prev_hash"] != expected_prev_hash:
-                return VerifyResult(valid=False, entries=len(entries), broken_at=entry["id"])
-
-            # 2. Re-verify data integrity
+            # 2. Check signature
             try:
-                # Decrypt to get original intent JSON string
+                pk.verify(bytes.fromhex(entry["signature"]), entry["intent_hash"].encode())
+            except Exception:
+                return VerifyResult(valid=False, entries=count, broken_at=entry["id"])
+
+            # 3. Data Integrity check (Content vs Hash)
+            try:
+                # Decrypt
                 nonce = bytes.fromhex(entry["nonce"])
                 encrypted = bytes.fromhex(entry["payload"])
                 decrypted_bytes = self.aesgcm.decrypt(nonce, encrypted, None)
                 intent_json = decrypted_bytes.decode()
 
                 # Re-calculate hash
-                content_to_hash = (
-                    intent_json +
-                    entry["agent_id"] +
-                    entry["timestamp"] +
-                    entry["risk_envelope_hash"] +
-                    entry["prev_hash"]
-                )
+                content_to_hash = (intent_json + entry["agent_id"] + entry["timestamp"] + entry["prev_hash"])
                 recalculated_hash = hashlib.sha256(content_to_hash.encode()).hexdigest()
 
                 if recalculated_hash != entry["intent_hash"]:
-                    return VerifyResult(valid=False, entries=len(entries), broken_at=entry["id"])
+                    return VerifyResult(valid=False, entries=count, broken_at=entry["id"])
             except Exception:
-                return VerifyResult(valid=False, entries=len(entries), broken_at=entry["id"])
+                return VerifyResult(valid=False, entries=count, broken_at=entry["id"])
 
-            expected_prev_hash = entry["intent_hash"]
+            expected_prev = entry["intent_hash"]
 
-        return VerifyResult(valid=True, entries=len(entries))
-
-    async def get_audit_trail(self, agent_id: str, from_dt: datetime, to_dt: datetime) -> List[LogEntry]:
-        cursor = self.collection.find({
-            "agent_id": agent_id,
-            "timestamp": {
-                "$gte": from_dt.isoformat(),
-                "$lte": to_dt.isoformat()
-            }
-        }).sort("timestamp", 1)
-
-        results = []
-        async for doc in cursor:
-            doc.pop("_id", None)
-            results.append(LogEntry(**doc))
-        return results
+        return VerifyResult(valid=True, entries=count)

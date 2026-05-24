@@ -23,6 +23,12 @@ class MockCollection:
                 return self.data
             def sort(self, key, direction):
                 return self
+            def __aiter__(self):
+                self.iter = iter(self.data)
+                return self
+            async def __anext__(self):
+                try: return next(self.iter)
+                except StopIteration: raise StopAsyncIteration
         return Cursor(self.data)
 
 @pytest.mark.asyncio

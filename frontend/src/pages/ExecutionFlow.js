@@ -10,8 +10,8 @@ const STEP_ICONS = { request_submitted: Send, risk_validation: Shield, execution
 
 const TimelineStep = ({ step, isLast }) => {
   const Icon = STEP_ICONS[step.step] || Clock;
-  const isComplete = step.status === "completed";
-  const isFailed = step.status === "failed";
+  const isComplete = step.status === "completed" || step.approved === true;
+  const isFailed = step.status === "failed" || step.approved === false;
 
   return (
     <div className="flex gap-3 relative" data-testid={`timeline-step-${step.step}`}>
@@ -40,6 +40,7 @@ export default function ExecutionFlow() {
   const [executions, setExecutions] = useState([]);
   const [agents, setAgents] = useState([]);
   const [selectedExec, setSelectedExec] = useState(null);
+  const [searchTerm, setSearch_term] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ agent_id: "", action: "swap", target_address: "", value: "1.0", chain_id: "43113" });
 
@@ -88,7 +89,16 @@ export default function ExecutionFlow() {
           <h1 className="page-title font-heading font-bold text-foreground uppercase tracking-tight">Execution Flow</h1>
           <p className="page-subtitle font-mono text-xs text-avaira-muted mt-1">{executions.length} EXECUTIONS RECORDED</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search audit IDs..."
+              value={searchTerm}
+              onChange={(e) => setSearch_term(e.target.value)}
+              className="bg-black border border-avaira-border px-3 py-1.5 font-mono text-[10px] text-white w-48 outline-none focus:border-avaira-primary"
+            />
+          </div>
           <button data-testid="refresh-executions-btn" onClick={fetchData} className="p-2 border border-avaira-border text-avaira-muted hover:text-avaira-primary hover:border-avaira-primary transition-colors">
             <RefreshCw size={14} />
           </button>
@@ -184,9 +194,12 @@ export default function ExecutionFlow() {
                   </tr>
                 </thead>
                 <tbody>
-                  {executions.map(ex => (
+                  {executions.filter(ex => !searchTerm || (ex.audit_id && ex.audit_id.toLowerCase().includes(searchTerm.toLowerCase()))).map(ex => (
                     <tr key={ex.id} className="cursor-pointer" onClick={() => setSelectedExec(ex)} data-testid={`exec-row-${ex.id}`}>
-                      <td className="text-foreground">{ex.agent_name}</td>
+                      <td className="text-foreground">
+                        {ex.agent_name}
+                        {ex.audit_id && <span className="block text-[8px] text-avaira-dim">{ex.audit_id}</span>}
+                      </td>
                       <td className="uppercase text-avaira-primary">{ex.action}</td>
                       <td className="text-right text-foreground">{ex.value.toFixed(4)}</td>
                       <td className="text-right text-avaira-yellow">{ex.fee_deducted.toFixed(6)}</td>
@@ -211,7 +224,14 @@ export default function ExecutionFlow() {
             <div data-testid="execution-timeline">
               <div className="mb-3 pb-3 border-b border-avaira-border">
                 <p className="font-mono text-xs text-avaira-primary">{selectedExec.agent_name}</p>
-                <p className="font-mono text-[10px] text-avaira-muted mt-0.5">ID: {selectedExec.id.slice(0, 8)}...</p>
+                <div className="flex justify-between items-center mt-1">
+                   <p className="font-mono text-[10px] text-avaira-muted">ID: {selectedExec.id.slice(0, 8)}...</p>
+                   {selectedExec.audit_id && (
+                     <span className="font-mono text-[9px] px-1.5 py-0.5 bg-avaira-primary/10 text-avaira-primary border border-avaira-primary/20">
+                        {selectedExec.audit_id}
+                     </span>
+                   )}
+                </div>
               </div>
               <div className="relative">
                 {selectedExec.lifecycle.map((step, i) => (

@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+import asyncio
 import anthropic
 from datetime import datetime, timezone
 from typing import Dict, Any, List
@@ -79,12 +80,19 @@ class AvairaAgent:
         # 2. Log Intent
         log_entry = await self.logger.log(intent_dict, self.agent_id, self.risk_envelope)
 
-        # 3. Validate
-        validation = await self.validator.validate(intent_dict, self.risk_envelope)
-        val_dict = validation.model_dump()
+        # 3. Validate (Shield v2 Pipeline)
+        # 3a. Fast Shield Pass (Pre-execution, high performance)
+        validation = await self.validator.fast_shield_pass(intent_dict, self.risk_envelope)
 
         execution_outcome = {}
         if validation.approved:
+            # 3b. Deep Neural Pass (In parallel/asynchronous to execution for better UX)
+            # In high-assurance mode, we would await this BEFORE execution.
+            # Here we demonstrate the hybrid model.
+            deep_audit_task = asyncio.create_task(
+                self.validator.deep_neural_audit(intent_dict, self.risk_envelope, validation.audit_id)
+            )
+
             # 4. Execute (Simulated for this generic class)
             execution_outcome = {
                 "status": "completed",
@@ -92,12 +100,24 @@ class AvairaAgent:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "value": intent.estimated_value
             }
-        else:
-            execution_outcome = {
-                "status": "blocked",
-                "reason": "Validation failed",
-                "violations": validation.violations
-            }
+
+            # Finalize validation object with deep audit results
+            deep_audit_res = await deep_audit_task
+            validation.stages.append(deep_audit_res)
+            validation.approved = validation.approved and deep_audit_res.approved
+            if not deep_audit_res.approved:
+                execution_outcome["status"] = "audit_failed"
+
+        val_dict = validation.model_dump()
+
+        if not validation.approved:
+            if execution_outcome.get("status") != "audit_failed":
+                execution_outcome = {
+                    "status": "blocked",
+                    "reason": "Validation failed",
+                    "violations": validation.violations
+                }
+
             # 5. Trigger Slash Evaluation
             slash_dec = await self.slash_engine.evaluate(self.agent_id, validation, execution_outcome)
             if slash_dec.should_slash:
@@ -105,11 +125,13 @@ class AvairaAgent:
 
         # Store execution in DB
         await self.db.executions.insert_one({
-            "trace_id": trace_id,
+            "id": trace_id, # Standardized to 'id' for frontend lookup
+            "audit_id": validation.audit_id,
             "agent_id": self.agent_id,
             "task": task,
             "intent": intent_dict,
             "validation": val_dict,
+            "lifecycle": validation.stages, # Pass stages to frontend
             "status": execution_outcome["status"],
             "value": intent.estimated_value,
             "timestamp": datetime.now(timezone.utc).isoformat()
