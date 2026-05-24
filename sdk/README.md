@@ -5,7 +5,7 @@ Enterprise-grade execution guardrails for autonomous agents.
 ## Quickstart
 
 ```python
-from avaira_shield_shield import ShieldClient, ShieldConfig, RiskEnvelope
+from avaira_shield import ShieldClient, ShieldConfig, RiskEnvelope
 
 # 1. Define enterprise boundaries
 envelope = RiskEnvelope(

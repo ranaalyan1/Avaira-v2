@@ -70,5 +70,27 @@ class AvairaClient:
         resp.raise_for_status()
         return resp.json()
 
+    async def get_trust_proof(self) -> Dict[str, Any]:
+        """
+        Get a condensed cryptographic proof of this agent's history.
+        Includes Merkle root and witness co-signatures.
+        """
+        resp = await self.http_client.get(
+            f"/api/agents/{self.config.agent_id}/trust-proof",
+            headers={"X-Avaira-API-Key": self.config.api_key}
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    async def verify_peer(self, proof: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handshake Protocol: Verify another agent's trust proof locally.
+        """
+        # In a fully decentralized model, we'd verify Merkle paths and signatures offline.
+        # For v3, we provide a verification utility endpoint.
+        resp = await self.http_client.post("/api/verify-proof", json=proof)
+        resp.raise_for_status()
+        return resp.json()
+
 ShieldClient = AvairaClient
 ShieldConfig = AvairaConfig

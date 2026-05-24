@@ -9,17 +9,27 @@ from pydantic import BaseModel, Field
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from motor.motor_asyncio import AsyncIOMotorClient
+from .witness_network import WitnessNetwork, WitnessSignature
 
 class LogEntry(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # W3C Verifiable Credential compatible structure
+    id: str = Field(default_factory=lambda: f"urn:uuid:{uuid.uuid4()}")
+    type: List[str] = ["VerifiableCredential", "AvairaIntentCredential"]
+    issuer: str # agent_did
+    issuanceDate: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    credentialSubject: Dict[str, Any] # Contains intent_hash, merkle_root, prev_hash, etc.
+    proof: Dict[str, Any] # Contains signature, verificationMethod (DID), created
+
+    # Avaira v3: Witness co-signatures for decentralized trust anchoring
+    witness_signatures: List[WitnessSignature] = []
+
+    # Internal fields (legacy support or ease of access)
     agent_id: str
     intent_hash: str
     merkle_root: Optional[str] = None
     prev_hash: Optional[str] = None
     payload: str  # Encrypted intent hex
     nonce: str    # AESGCM nonce hex
-    signature: Optional[str] = None
 
 class MerkleProof(BaseModel):
     entry_id: str
@@ -47,6 +57,7 @@ class IntentLogger:
         self.secret = os.environ.get("AVAIRA_LOG_SECRET", "default_secret_32_bytes_long_!!!!!")
         self.key = hashlib.sha256(self.secret.encode()).digest()
         self.aesgcm = AESGCM(self.key)
+        self.witness_net = WitnessNetwork()
 
     def _get_agent_signing_key(self, agent_id: str) -> ed25519.Ed25519PrivateKey:
         # In a real app, load from secure storage (Vault/KMS)
@@ -67,6 +78,9 @@ class IntentLogger:
 
         return self._compute_merkle_root(new_hashes)
 
+    def _get_agent_did(self, agent_id: str) -> str:
+        return f"did:avaira:{agent_id}"
+
     async def log(self, intent: dict, agent_id: str, risk_envelope: dict) -> LogEntry:
         if agent_id not in self._locks:
             self._locks[agent_id] = asyncio.Lock()
@@ -74,7 +88,7 @@ class IntentLogger:
         async with self._locks[agent_id]:
             last_entry = await self.collection.find_one(
                 {"agent_id": agent_id},
-                sort=[("timestamp", -1)]
+                sort=[("issuanceDate", -1)]
             )
             prev_hash = last_entry["intent_hash"] if last_entry else "0" * 64
 
@@ -85,35 +99,51 @@ class IntentLogger:
             content_to_hash = (intent_json + agent_id + timestamp + prev_hash)
             intent_hash = hashlib.sha256(content_to_hash.encode()).hexdigest()
 
-            # Signing
+            # Merkle logic
+            merkle_root = self._compute_merkle_root([prev_hash, intent_hash])
+
+            # Signing (VC Proof)
             sk = self._get_agent_signing_key(agent_id)
             signature = sk.sign(intent_hash.encode()).hex()
+            agent_did = self._get_agent_did(agent_id)
 
             # Encrypt
             nonce = os.urandom(12)
             encrypted_payload = self.aesgcm.encrypt(nonce, intent_json.encode(), None)
 
-            # Merkle logic (local tree for this batch/history)
-            # In a real system, we'd batch multiple entries into a root.
-            # Here we just compute root of [prev, current] as a link.
-            merkle_root = self._compute_merkle_root([prev_hash, intent_hash])
+            # Decentralized Anchoring: Request witness co-signatures
+            witness_sigs = await self.witness_net.co_sign_anchor(merkle_root, timestamp)
 
             entry = LogEntry(
                 agent_id=agent_id,
-                timestamp=timestamp,
                 intent_hash=intent_hash,
                 merkle_root=merkle_root,
                 prev_hash=prev_hash,
                 payload=encrypted_payload.hex(),
                 nonce=nonce.hex(),
-                signature=signature
+                issuer=agent_did,
+                issuanceDate=timestamp, # Match hashing timestamp
+                witness_signatures=witness_sigs,
+                credentialSubject={
+                    "intent_hash": intent_hash,
+                    "merkle_root": merkle_root,
+                    "prev_hash": prev_hash,
+                    "risk_envelope_hash": hashlib.sha256(json.dumps(risk_envelope, sort_keys=True).encode()).hexdigest()
+                },
+                proof={
+                    "type": "Ed25519Signature2020",
+                    "created": timestamp,
+                    "verificationMethod": f"{agent_did}#key-1",
+                    "proofPurpose": "assertionMethod",
+                    "jws": signature
+                }
             )
 
             await self.collection.insert_one(entry.model_dump())
             return entry
 
     async def verify_chain(self, agent_id: str) -> VerifyResult:
-        cursor = self.collection.find({"agent_id": agent_id}).sort("timestamp", 1)
+        cursor = self.collection.find({"agent_id": agent_id}).sort("issuanceDate", 1)
         expected_prev = "0" * 64
         pk = self._get_agent_signing_key(agent_id).public_key()
         count = 0
@@ -124,9 +154,9 @@ class IntentLogger:
             if entry["prev_hash"] != expected_prev:
                 return VerifyResult(valid=False, entries=count, broken_at=entry["id"])
 
-            # 2. Check signature
+            # 2. Check signature (VC proof)
             try:
-                pk.verify(bytes.fromhex(entry["signature"]), entry["intent_hash"].encode())
+                pk.verify(bytes.fromhex(entry["proof"]["jws"]), entry["intent_hash"].encode())
             except Exception:
                 return VerifyResult(valid=False, entries=count, broken_at=entry["id"])
 
@@ -139,7 +169,8 @@ class IntentLogger:
                 intent_json = decrypted_bytes.decode()
 
                 # Re-calculate hash
-                content_to_hash = (intent_json + entry["agent_id"] + entry["timestamp"] + entry["prev_hash"])
+                # LogEntry uses issuanceDate as the canonical timestamp for the audit trail
+                content_to_hash = (intent_json + entry["agent_id"] + entry["issuanceDate"] + entry["prev_hash"])
                 recalculated_hash = hashlib.sha256(content_to_hash.encode()).hexdigest()
 
                 if recalculated_hash != entry["intent_hash"]:

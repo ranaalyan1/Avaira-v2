@@ -28,6 +28,47 @@ class ReputationEngine:
         else:
             self.db = db_client
 
+        # Avaira v3 Trust Graph
+        self.trust_graph = self.db.trust_graph
+
+    async def record_interaction(self, from_agent: str, to_agent: str, rating: float, evidence_hash: str):
+        """
+        Record a directed trust interaction between two agents.
+        rating: -1.0 to 1.0
+        """
+        await self.trust_graph.update_one(
+            {"from_agent": from_agent, "to_agent": to_agent},
+            {
+                "$set": {
+                    "rating": rating,
+                    "evidence_hash": evidence_hash,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            },
+            upsert=True
+        )
+
+    async def get_subjective_reputation(self, target_agent: str, observer_agent: str) -> float:
+        """
+        Computes reputation of 'target' from the perspective of 'observer'
+        using transitive trust (PowerIteration/EigenTrust style).
+        """
+        # Simplified for v3: Direct rating + average of 1st-degree neighbors
+        direct = await self.trust_graph.find_one({"from_agent": observer_agent, "to_agent": target_agent})
+        base_trust = direct["rating"] if direct else 0.0
+
+        # Transitive: Who does the observer trust? And who do they trust?
+        trusted_by_observer = await self.trust_graph.find({"from_agent": observer_agent, "rating": {"$gt": 0}}).to_list(None)
+
+        transitive_trust = []
+        for peer in trusted_by_observer:
+            peer_rating = await self.trust_graph.find_one({"from_agent": peer["to_agent"], "to_agent": target_agent})
+            if peer_rating:
+                transitive_trust.append(peer_rating["rating"] * peer["rating"])
+
+        if not transitive_trust: return base_trust
+        return (base_trust + sum(transitive_trust) / len(transitive_trust)) / 2
+
     async def compute_score(self, agent_id: str) -> AvairaScore:
         agent = await self.db.agents.find_one({"id": agent_id})
         if not agent:

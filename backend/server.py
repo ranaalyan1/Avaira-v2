@@ -1585,6 +1585,55 @@ async def agent_log_outcome(agent_id: str, body: Dict[str, Any], agent: Dict = D
     })
     return {"status": "logged"}
 
+@api_router.get("/agents/{agent_id}/trust-proof")
+async def get_agent_trust_proof(agent_id: str, agent: Dict = Depends(_get_agent_from_key)):
+    if agent["id"] != agent_id:
+        raise HTTPException(403, "API Key does not match agent ID")
+
+    # Get last N entries to build a condensed proof
+    trail = await intent_logger.collection.find({"agent_id": agent_id}).sort("issuanceDate", -1).limit(10).to_list(None)
+    if not trail:
+        raise HTTPException(404, "No history found")
+
+    latest = trail[0]
+    return {
+        "agent_id": agent_id,
+        "agent_did": f"did:avaira:{agent_id}",
+        "merkle_root": latest["merkle_root"],
+        "intent_hash": latest["intent_hash"],
+        "timestamp": latest["issuanceDate"],
+        "witness_signatures": latest["witness_signatures"],
+        "proof": latest["proof"]
+    }
+
+@api_router.post("/verify-proof")
+async def verify_trust_proof(body: Dict[str, Any]):
+    agent_id = body.get("agent_id")
+    if not agent_id: raise HTTPException(400, "Missing agent_id")
+
+    # Verify witness signatures
+    merkle_root = body.get("merkle_root")
+    timestamp = body.get("timestamp")
+    witness_sigs = body.get("witness_signatures", [])
+
+    from core.witness_network import WitnessNetwork, WitnessSignature
+    wn = WitnessNetwork()
+
+    valid_sigs = 0
+    for sig_data in witness_sigs:
+        sig = WitnessSignature(**sig_data)
+        if wn.verify_witness_signature(merkle_root, timestamp, sig):
+            valid_sigs += 1
+
+    # Consensus: requires at least 2 witnesses
+    trusted = (valid_sigs >= 2)
+
+    return {
+        "trusted": trusted,
+        "witness_count": valid_sigs,
+        "detail": "Quorum of co-signatures verified" if trusted else "Insufficient witness co-signatures"
+    }
+
 @api_router.get("/agents/{agent_id}/audit")
 async def get_agent_audit(agent_id: str, agent: Dict = Depends(_get_agent_from_key)):
     if agent["id"] != agent_id:

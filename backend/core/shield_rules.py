@@ -17,10 +17,14 @@ class ShieldRules:
         self.endpoint = endpoint or os.environ.get("OPA_ENDPOINT", "http://localhost:8181/v1/data/avaira/shield")
 
     async def evaluate(self, intent: Dict[str, Any], risk_envelope: Dict[str, Any]) -> OPAResult:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+
         payload = {
             "input": {
                 "intent": intent,
-                "risk_envelope": risk_envelope
+                "risk_envelope": risk_envelope,
+                "current_time_hour": now.hour
             }
         }
 

@@ -1,6 +1,6 @@
 import asyncio
-from avaira_shield_shield.client import AvairaClient
-from avaira_shield_shield.config import AvairaConfig, RiskEnvelope
+from avaira_shield.client import AvairaClient
+from avaira_shield.config import AvairaConfig, RiskEnvelope
 
 async def main():
     # 1. Configure

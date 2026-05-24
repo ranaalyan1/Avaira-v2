@@ -11,14 +11,17 @@ class MockCollection:
         self.data = []
     async def find_one(self, filter, sort=None):
         if not self.data: return None
-        sorted_data = sorted(self.data, key=lambda x: x['timestamp'], reverse=True)
+        # Support both old and new timestamp field
+        key_fn = lambda x: x.get('issuanceDate') or x.get('timestamp')
+        sorted_data = sorted(self.data, key=key_fn, reverse=True)
         return sorted_data[0]
     async def insert_one(self, doc):
         self.data.append(doc)
     def find(self, filter):
         class Cursor:
             def __init__(self, data):
-                self.data = sorted(data, key=lambda x: x['timestamp'])
+                key_fn = lambda x: x.get('issuanceDate') or x.get('timestamp')
+                self.data = sorted(data, key=key_fn)
             async def to_list(self, length):
                 return self.data
             def sort(self, key, direction):
