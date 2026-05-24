@@ -79,8 +79,4 @@ Start the full Avaira stack locally using Docker:
 docker compose up
 ```
 
----
 
-## ⚖️ License
-
-MIT
