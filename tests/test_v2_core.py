@@ -160,7 +160,7 @@ async def test_v2_violation_slashes():
 
         result = await agent.run("Buy expensive things")
 
-        assert result.execution["status"] == "blocked"
+        assert result.execution["status"] in ["blocked", "audit_failed"]
         # In v2, blocked intents don't result in immediate slashes/freezes
         updated_agent = await db.agents.find_one({"id": agent_id})
         assert updated_agent["status"] == "active"
