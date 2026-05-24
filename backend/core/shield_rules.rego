@@ -63,11 +63,36 @@ violation_spend_limit {
     input.intent.estimated_value > limit
 }
 
-# 4. Time Windows
+# 4. Time Windows (Temporal Logic)
+# window format: {"start_hour": 9, "end_hour": 17, "timezone": "UTC"}
 violation_time_window {
-    # Example: block actions during maintenance window or outside business hours if configured
     window := object.get(input.risk_envelope, "allowed_time_window", null)
     window != null
-    now := input.current_time # Provided by caller
-    # Logic to check if now is inside allowed window
+
+    current_hour := input.current_time_hour # 0-23
+
+    is_outside_window(current_hour, window.start_hour, window.end_hour)
+}
+
+is_outside_window(hour, start, end) {
+    hour < start
+}
+is_outside_window(hour, start, end) {
+    hour > end
+}
+
+# 5. Delegation Chains
+# Allows an agent to authorize actions if a 'parent' or 'accountant' has delegated authority.
+violation_delegation_invalid {
+    required_role := object.get(input.risk_envelope, "delegation_required_role", null)
+    required_role != null
+
+    # Check if the intent contains a valid delegation proof for the required role
+    proof := object.get(input.intent, "delegation_proof", null)
+    not proof_is_valid(proof, required_role)
+}
+
+proof_is_valid(proof, role) {
+    proof.role == role
+    proof.signature_valid == true
 }

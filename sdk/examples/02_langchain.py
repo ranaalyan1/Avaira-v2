@@ -1,7 +1,7 @@
 import asyncio
-from avaira_shield_shield.client import AvairaClient
-from avaira_shield_shield.config import AvairaConfig, RiskEnvelope
-from avaira_shield_shield.langchain_integration import protect_agent
+from avaira_shield.client import AvairaClient
+from avaira_shield.config import AvairaConfig, RiskEnvelope
+from avaira_shield.langchain_integration import protect_agent
 
 # Mock tools since we don't have LangChain installed in the environment
 class MockSearchTool:

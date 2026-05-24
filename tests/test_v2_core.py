@@ -62,6 +62,7 @@ class MockDB:
         self.executions = MockCollection()
         self.slash_events = MockCollection()
         self.reputation_history = MockCollection()
+        self.trust_graph = MockCollection()
 
 @pytest.mark.asyncio
 async def test_v2_full_integration():
