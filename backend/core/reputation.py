@@ -108,14 +108,15 @@ class ReputationEngine:
         # Placeholder
         appeal_score = 100.0
 
-        # Avaira Score v2 - High Assurance Formula
+        # Avaira Score (S_A) - Master Architectural Formula
+        # S_A = 0.30(R_success) + 0.20(C_intent) - 0.20(P_slash) + 0.15(V_econ) + 0.10(T_maturity) + 0.05(R_appeal)
         composite = (
-            success_rate * 0.40 +    # Critical: Performance
-            slash_score * 0.30 +     # Critical: Safety
-            consistency * 0.10 +     # Behavioral alignment
-            volume_score * 0.10 +    # Economic throughput
-            age_score * 0.05 +       # Reliability over time
-            appeal_score * 0.05      # Resolution capability
+            success_rate * 0.30 +    # R_success: Success rate
+            consistency * 0.20 +     # C_intent: Intent alignment
+            slash_score * 0.20 +     # P_slash: Slash penalty (stored as positive score, effect is inverse)
+            volume_score * 0.15 +    # V_econ: Economic volume
+            age_score * 0.10 +       # T_maturity: Maturity/Age
+            appeal_score * 0.05      # R_appeal: Appeal resolution
         )
 
         grade = "D"

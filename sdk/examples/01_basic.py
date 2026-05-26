@@ -12,7 +12,7 @@ async def main():
     config = AvairaConfig(
         api_key="init_key",
         risk_envelope=envelope,
-        api_url="http://localhost:8000" # Local dev
+        api_url="http://localhost:8001" # Local dev
     )
     client = AvairaClient(config)
 

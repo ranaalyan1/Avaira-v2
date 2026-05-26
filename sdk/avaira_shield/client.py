@@ -7,17 +7,33 @@ from .config import AvairaConfig, RiskEnvelope
 class AvairaClient:
     def __init__(self, config: AvairaConfig):
         self.config = config
-        self.http_client = httpx.AsyncClient(base_url=config.api_url)
+        self.http_client = httpx.AsyncClient(
+            base_url=config.api_url,
+            timeout=httpx.Timeout(10.0, connect=5.0)
+        )
+
+    async def _request(self, method: str, path: str, **kwargs) -> Dict[str, Any]:
+        """Centralized request handler with error normalization."""
+        try:
+            resp = await getattr(self.http_client, method.lower())(path, **kwargs)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            try:
+                detail = e.response.json().get("detail", str(e))
+            except:
+                detail = str(e)
+            raise RuntimeError(f"Avaira API Error: {detail}") from e
+        except Exception as e:
+            raise RuntimeError(f"Avaira Connection Error: {str(e)}") from e
 
     async def register(self, name: str, goal: str) -> str:
-        resp = await self.http_client.post("/api/agents/register", json={
+        data = await self._request("POST", "/api/agents/register", json={
             "name": name,
             "goal": goal,
             "risk_envelope": self.config.risk_envelope.model_dump(),
             "webhook_url": self.config.webhook_url
         })
-        resp.raise_for_status()
-        data = resp.json()
         self.config.agent_id = data["agent_id"]
         self.config.api_key = data["api_key"]
         return data["agent_id"]
@@ -46,7 +62,7 @@ class AvairaClient:
             result = str(e)
             status = "failed"
 
-        await self.http_client.post(f"/api/agents/{self.config.agent_id}/log",
+        await self._request("POST", f"/api/agents/{self.config.agent_id}/log",
             json={"intent": intent, "status": status, "result": result},
             headers={"X-Avaira-API-Key": self.config.api_key}
         )
@@ -58,39 +74,23 @@ class AvairaClient:
         }
 
     async def validate(self, intent: dict) -> Dict[str, Any]:
-        resp = await self.http_client.post("/api/validate", json={
+        return await self._request("POST", "/api/validate", json={
             "intent": intent,
             "risk_envelope": self.config.risk_envelope.model_dump()
         })
-        resp.raise_for_status()
-        return resp.json()
 
     async def get_score(self) -> Dict[str, Any]:
-        resp = await self.http_client.get(f"/api/agents/{self.config.agent_id}/score")
-        resp.raise_for_status()
-        return resp.json()
+        return await self._request("GET", f"/api/agents/{self.config.agent_id}/score")
 
     async def get_trust_proof(self) -> Dict[str, Any]:
-        """
-        Get a condensed cryptographic proof of this agent's history.
-        Includes Merkle root and witness co-signatures.
-        """
-        resp = await self.http_client.get(
+        return await self._request(
+            "GET",
             f"/api/agents/{self.config.agent_id}/trust-proof",
             headers={"X-Avaira-API-Key": self.config.api_key}
         )
-        resp.raise_for_status()
-        return resp.json()
 
     async def verify_peer(self, proof: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Handshake Protocol: Verify another agent's trust proof locally.
-        """
-        # In a fully decentralized model, we'd verify Merkle paths and signatures offline.
-        # For v3, we provide a verification utility endpoint.
-        resp = await self.http_client.post("/api/verify-proof", json=proof)
-        resp.raise_for_status()
-        return resp.json()
+        return await self._request("POST", "/api/verify-proof", json=proof)
 
 ShieldClient = AvairaClient
 ShieldConfig = AvairaConfig
