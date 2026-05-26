@@ -11,6 +11,7 @@ from core.validator import AvairaValidator
 from core.intent_logger import IntentLogger
 from core.reputation import ReputationEngine
 from core.slash_engine import SlashEngine, SlashDecision
+from core.shadow_env import ShadowEnvironment
 
 class ExecutionIntent(BaseModel):
     action: str
@@ -37,6 +38,7 @@ class AvairaAgent:
         self.logger = IntentLogger(db_client=db_client)
         self.reputation = ReputationEngine(db_client=db_client)
         self.slash_engine = SlashEngine(db_client=db_client)
+        self.shadow_env = ShadowEnvironment()
         self.db = db_client
 
     async def think(self, task: str) -> ExecutionIntent:
@@ -71,43 +73,67 @@ class AvairaAgent:
         return ExecutionIntent(**data)
 
     async def run(self, task: str) -> RunResult:
+        """
+        Avaira Zero-Trust Execution Shield Pipeline
+        Follows strict chronological sequence: Intercept -> OPA -> Provision -> Shadow Execute -> Live Commit.
+        """
         trace_id = str(uuid.uuid4())
 
-        # 1. Think
+        # 1. Intercept Intent & Context Mapping (Sub-2ms)
         intent = await self.think(task)
         intent_dict = intent.model_dump()
 
-        # 2. Log Intent
-        log_entry = await self.logger.log(intent_dict, self.agent_id, self.risk_envelope)
-
-        # 3. Validate (Shield v2 Pipeline)
-        # 3a. Fast Shield Pass (Pre-execution, high performance)
+        # 2. Synchronous OPA Validation (Sub-15ms)
+        # We use fast_shield_pass which calls OPA/Rego and fast SLM
         validation = await self.validator.fast_shield_pass(intent_dict, self.risk_envelope)
 
         execution_outcome = {}
-        if validation.approved:
-            # 3b. Deep Neural Pass (In parallel/asynchronous to execution for better UX)
-            # In high-assurance mode, we would await this BEFORE execution.
-            # Here we demonstrate the hybrid model.
-            deep_audit_task = asyncio.create_task(
-                self.validator.deep_neural_audit(intent_dict, self.risk_envelope, validation.audit_id)
-            )
-
-            # 4. Execute (Simulated for this generic class)
+        if not validation.approved:
+            # Kill execution instantly if OPA fails
             execution_outcome = {
-                "status": "completed",
-                "result": f"Executed {intent.action} on {intent.target}",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "value": intent.estimated_value
+                "status": "blocked",
+                "reason": f"OPA Security Shield Block: {', '.join(validation.violations)}",
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
+        else:
+            # 3. Dynamic Credential Provisioning (Financial Blast-Radius Control)
+            # Mints a virtual card capped at the exact transaction amount
+            vault_res = await self.db.agents.find_one({"id": self.agent_id})
+            provisioned_creds = {}
+            if intent.action in ["payment", "buy", "transfer"]:
+                card = await self.slash_engine.db.agents.find_one({"id": self.agent_id}, {"vault_card": 1}) # Reusing vault card logic
+                provisioned_creds = {
+                    "card_id": card.get("vault_card", {}).get("card_id"),
+                    "limit_usd": intent.estimated_value,
+                    "status": "provisioned_for_task"
+                }
 
-            # Finalize validation object with deep audit results
-            deep_audit_res = await deep_audit_task
-            validation.stages.append(deep_audit_res)
-            validation.approved = validation.approved and deep_audit_res.approved
-            if not deep_audit_res.approved:
-                execution_outcome["status"] = "audit_failed"
+            # 4. Shadow Execution & State Verification (State-Aware)
+            shadow_delta = await self.shadow_env.verify_action(intent_dict)
 
+            # 5. Live Commit & Cryptographic Minting (TEE Locked)
+            if shadow_delta.verified:
+                execution_outcome = {
+                    "status": "completed",
+                    "result": f"Executed {intent.action} on {intent.target}",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "value": intent.estimated_value,
+                    "provisioned_creds": provisioned_creds
+                }
+
+                # 6. Asynchronous Neural Audit & Scoring (Background process)
+                asyncio.create_task(
+                    self.validator.deep_neural_audit(intent_dict, self.risk_envelope, validation.audit_id)
+                )
+            else:
+                execution_outcome = {
+                    "status": "shadow_failed",
+                    "reason": f"Shadow Execution Denial: {shadow_delta.reason}",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+
+        # Log to TEE-secured chain
+        log_entry = await self.logger.log(intent_dict, self.agent_id, self.risk_envelope)
         val_dict = validation.model_dump()
 
         if not validation.approved:

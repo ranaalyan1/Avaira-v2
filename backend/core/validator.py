@@ -47,16 +47,19 @@ class AvairaValidator:
     async def fast_shield_pass(self, intent: dict, risk_envelope: dict, plan: List[str] = None) -> ValidationResult:
         """
         STAGE 1: Pre-Execution (Fast Pass Shield)
-        Targets < 50ms latency.
+        Targets < 15ms synchronous OPA validation.
         """
         start_pipeline = time.time()
         audit_id = f"VAL-{uuid.uuid4().hex[:8].upper()}"
         stages = []
 
         s1_start = time.time()
-        slm_result = await self.slm.classify_intent(intent, plan)
-        opa_result = await self.rules.evaluate(intent, risk_envelope)
 
+        # In a high-assurance deployment, OPA must clears before SLM is even considered
+        opa_result = await self.rules.evaluate(intent, risk_envelope)
+        slm_result = await self.slm.classify_intent(intent, plan)
+
+        # Blueprint: Deterministic OPA MUST override neural reasoning.
         approved = opa_result.allow and not slm_result.is_malicious
         findings = f"SLM: {slm_result.risk_category}. OPA: {len(opa_result.violations)} violations."
         stages.append(ValidationStage(

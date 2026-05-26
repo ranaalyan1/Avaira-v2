@@ -148,11 +148,11 @@ async def test_v2_violation_slashes():
 
         agent = AvairaAgent(agent_id, envelope, db_client=db)
 
-        # Manually mock SLM and Rules
+        # Manually mock SLM and Rules - FAIL OPA to test Zero-Trust Block
         agent.validator.slm = AsyncMock()
-        agent.validator.slm.classify_intent.return_value = MagicMock(is_malicious=False, reasoning="Safe")
+        agent.validator.slm.classify_intent.return_value = MagicMock(is_malicious=False, reasoning="Safe", adversarial_signals=[])
         agent.validator.rules = AsyncMock()
-        agent.validator.rules.evaluate.return_value = MagicMock(allow=True, violations=[])
+        agent.validator.rules.evaluate.return_value = MagicMock(allow=False, violations=["budget_exceeded"])
 
         agent.think = AsyncMock(return_value=MagicMock(
             action="search", target="google", parameters={}, estimated_value=500.0, reasoning="Buying everything",
