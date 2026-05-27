@@ -1,7 +1,0 @@
-2026-05-22 18:17:38,121 - __main__ - WARNING - WARNING: Using local MongoDB. Switch to Atlas for production.
-INFO:     Started server process [1053649]
-INFO:     Waiting for application startup.
-2026-05-22 18:17:41,357 - __main__ - WARNING - WARNING: MongoDB unavailable. Starting in degraded mode. localhost:27017: [Errno 111] Connection refused (configured timeouts: socketTimeoutMS: 20000.0ms, connectTimeoutMS: 20000.0ms), Timeout: 3.0s, Topology Description: <TopologyDescription id: 6a109dc2fe4c692def521ae2, topology_type: Unknown, servers: [<ServerDescription ('localhost', 27017) server_type: Unknown, rtt: None, error=AutoReconnect('localhost:27017: [Errno 111] Connection refused (configured timeouts: socketTimeoutMS: 20000.0ms, connectTimeoutMS: 20000.0ms)')>]>
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
-INFO:     127.0.0.1:32796 - "GET /api/health HTTP/1.1" 503 Service Unavailable

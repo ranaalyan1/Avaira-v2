@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { API } from "@/lib/api";
 import AgentDashboard from "@/components/AgentDashboard";
+import TrustHeatmap from "@/components/TrustHeatmap";
 
 const StatCard = ({ icon: Icon, label, value, color, delay }) => (
   <div className={`cyber-card p-4 animate-slide-in stagger-${delay}`} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
@@ -223,6 +224,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <TrustHeatmap />
       <AgentDashboard />
     </div>
   );
