@@ -10,17 +10,18 @@ class ExecutionIntent(BaseModel):
 
     action: str
     target: str
-    value_avax: float
+    value_usd: float
     rationale: str
     confidence: float = Field(ge=0, le=1)
 
 
 class RuntimeRiskEnvelope(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
-    max_tx_value: float
+    max_tx_value: float = 1.0
+    max_spend_usd: float = 1.0
     max_slippage: float = Field(default=0.05, ge=0, le=1)
-    allowed_actions: List[str]
+    allowed_actions: List[str] = []
 
 class AvairaAgent:
     def __init__(self, agent_address: str, risk_envelope: RuntimeRiskEnvelope | Dict[str, Any], mission_goal: str):
@@ -32,8 +33,8 @@ class AvairaAgent:
         return self._planned_intent(market_context, history)
 
     def validate(self, intent: ExecutionIntent) -> dict:
-        if intent.value_avax > self.risk_envelope.max_tx_value:
-            return {"valid": False, "reason": f"value_avax {intent.value_avax} exceeds max_tx_value {self.risk_envelope.max_tx_value}"}
+        if intent.value_usd > self.risk_envelope.max_tx_value:
+            return {"valid": False, "reason": f"value_usd {intent.value_usd} exceeds max_tx_value {self.risk_envelope.max_tx_value}"}
         if intent.action not in self.risk_envelope.allowed_actions:
             return {"valid": False, "reason": f"action '{intent.action}' is not allowed by the registered risk envelope"}
         return {"valid": True, "reason": "within risk envelope"}
@@ -51,7 +52,7 @@ class AvairaAgent:
     def _planned_intent(self, market_context: Dict[str, Any], history: List[Dict[str, Any]]) -> ExecutionIntent:
         target = market_context.get("target") or "0x0000000000000000000000000000000000000000"
         action = self.risk_envelope.allowed_actions[0] if self.risk_envelope.allowed_actions else "hold"
-        suggested_value = float(market_context.get("suggested_value_avax", 0.1))
+        suggested_value = float(market_context.get("suggested_value_usd", 0.1))
         market_signal = str(market_context.get("market_signal", "neutral")).lower()
         prior_attempts = len(history)
 
@@ -70,7 +71,7 @@ class AvairaAgent:
         return ExecutionIntent(
             action=action,
             target=target,
-            value_avax=bounded_value,
+            value_usd=bounded_value,
             rationale=(
                 "Local planner selected the lowest-risk allowed action using mission goal, "
                 "market context, and prior execution history."

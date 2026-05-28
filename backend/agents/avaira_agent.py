@@ -148,7 +148,7 @@ class AvairaAgent:
 
                 # 6. Asynchronous Neural Audit & Scoring (Background process)
                 asyncio.create_task(
-                    self.validator.deep_neural_audit(intent_dict, self.risk_envelope, validation.audit_id)
+                    self.validator.deep_neural_audit(intent_dict, self.risk_envelope, validation.audit_id, db=self.db)
                 )
             else:
                 execution_outcome = {

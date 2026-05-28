@@ -26,8 +26,10 @@ from urllib.parse import urlencode, urlparse
 
 try:
     from .agent_runtime import AvairaAgent, RuntimeRiskEnvelope
+    from .permit import generate_permit, verify_permit
 except ImportError:  # pragma: no cover
     from agent_runtime import AvairaAgent, RuntimeRiskEnvelope
+    from permit import generate_permit, verify_permit
 
 # Core Trust Engine Imports
 try:
@@ -103,6 +105,12 @@ SUBSCRIPTION_TIERS = {
     'growth': {'price': 200, 'max_agents': 10, 'features': ['enhanced_monitoring', 'verified_badge', 'priority_support']},
     'enterprise': {'price': 2000, 'max_agents': -1, 'features': ['unlimited_agents', 'custom_risk', 'compliance_reports', 'dedicated_pool']}
 }
+
+AGENT_REGISTRY_ADDRESS = os.environ.get("AGENT_REGISTRY_ADDRESS", "")
+EXECUTION_WALLET_ADDRESS = os.environ.get("EXECUTION_WALLET_ADDRESS", "")
+FREEZE_SLASH_ADDRESS = os.environ.get("FREEZE_SLASH_ADDRESS", "")
+TREASURY_ADDRESS = os.environ.get("TREASURY_ADDRESS", "")
+REPUTATION_ENGINE_ADDRESS = os.environ.get("REPUTATION_ENGINE_ADDRESS", "")
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -303,23 +311,28 @@ def _grade_from_score(score: float) -> str:
     return "D"
 
 
-def _normalize_score(agent: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+async def _normalize_score(agent: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not agent:
         return {"score": 50, "grade": "C"}
-    if "avaira_score" in agent:
-        score = max(0, min(100, int(round(agent.get("avaira_score", 50)))))
-    else:
-        score = max(0, min(100, int(round(agent.get("reputation", INITIAL_REPUTATION) / 2))))
-    return {"score": score, "grade": agent.get("grade", _grade_from_score(score))}
+    try:
+        score_obj = await reputation_engine.compute_score(agent["id"])
+        return {"score": score_obj.score, "grade": score_obj.grade}
+    except Exception:
+        if "avaira_score" in agent:
+            score = max(0, min(100, int(round(agent.get("avaira_score", 50)))))
+        else:
+            score = max(0, min(100, int(round(agent.get("reputation", INITIAL_REPUTATION) / 2))))
+        return {"score": score, "grade": agent.get("grade", _grade_from_score(score))}
 
 
 async def _ensure_ai_agent_record(body: AgentThinkRequest) -> Dict[str, Any]:
     existing = await db.agents.find_one({"wallet_address": body.agent_address}, {"_id": 0})
     timestamp = datetime.now(timezone.utc).isoformat()
+    # body.risk_envelope is a Dict[str, Any] as per AgentThinkRequest model
     if existing:
         updates = {
             "mission_intent": body.mission_goal,
-            "risk_envelope": body.risk_envelope.model_dump(),
+            "risk_envelope": body.risk_envelope,
             "updated_at": timestamp,
             "status": existing.get("status", "active"),
         }
@@ -334,7 +347,7 @@ async def _ensure_ai_agent_record(body: AgentThinkRequest) -> Dict[str, Any]:
         "collateral_amount": 0.1,
         "collateral_remaining": 0.1,
         "mission_intent": body.mission_goal,
-        "risk_envelope": body.risk_envelope.model_dump(),
+        "risk_envelope": body.risk_envelope,
         "status": "active",
         "reputation": INITIAL_REPUTATION,
         "avaira_score": 50,
@@ -352,7 +365,8 @@ async def _ensure_ai_agent_record(body: AgentThinkRequest) -> Dict[str, Any]:
 
 
 async def _write_reputation_snapshot(agent: Dict[str, Any], new_score: int, reason: str):
-    previous = _normalize_score(agent)["score"]
+    score_payload = await _normalize_score(agent)
+    previous = score_payload["score"]
     grade = _grade_from_score(new_score)
     await db.agents.update_one(
         {"id": agent["id"]},
@@ -380,8 +394,9 @@ async def _write_reputation_snapshot(agent: Dict[str, Any], new_score: int, reas
 
 def validate_risk_envelope(request_data: Dict, risk_envelope: Dict) -> Dict:
     violations = []
-    if request_data.get("value", 0) > risk_envelope.get("max_tx_value", 10.0):
-        violations.append(f"Value {request_data['value']} exceeds max {risk_envelope['max_tx_value']}")
+    max_spend = risk_envelope.get("max_spend_usd") or risk_envelope.get("max_tx_value", 10.0)
+    if request_data.get("value", 0) > max_spend:
+        violations.append(f"Value {request_data['value']} exceeds max {max_spend}")
     if request_data.get("action") not in risk_envelope.get("allowed_actions", []):
         violations.append(f"Action '{request_data['action']}' not in allowed actions")
     return {"valid": len(violations) == 0, "violations": violations}
@@ -1121,7 +1136,7 @@ async def get_architecture():
                     {"name": "agentStatus", "type": "mapping(bytes32 => AgentStatus)", "description": "Agent operational status"},
                     {"name": "reputationScores", "type": "mapping(bytes32 => uint256)", "description": "Agent reputation scores"},
                     {"name": "totalAgents", "type": "uint256", "description": "Total registered agents"},
-                    {"name": "minCollateral", "type": "uint256", "description": "Minimum collateral required (0.1 AVAX)"}
+                    {"name": "minCollateral", "type": "uint256", "description": "Minimum collateral required (0.1 USD)"}
                 ],
                 "functions": [
                     {"name": "registerAgent", "params": "(string name, bytes32 missionHash, RiskEnvelope envelope)", "returns": "bytes32 agentId", "modifier": "payable", "description": "Register new agent with collateral stake"},
@@ -1282,39 +1297,42 @@ async def simulate_protocol_lifecycle(request: Request, admin_user: Dict[str, An
     # Step 1: Register agent
     agent_data = AgentCreate(
         name=f"SimBot-{secrets.token_hex(3).upper()}",
-        wallet_address="0x" + secrets.token_hex(20),
-        collateral_amount=5.0,
-        mission_intent="Automated DeFi yield optimization on Avalanche",
-        risk_envelope=RiskEnvelope(max_tx_value=10.0, max_daily_txns=50, allowed_actions=["transfer", "swap", "stake"], max_slippage=0.05)
+        goal="Automated DeFi yield optimization on Avalanche",
+        risk_envelope=RiskEnvelope(max_spend_usd=50.0, allowed_actions=["transfer", "swap", "stake"]),
+        webhook_url=None
     )
-    agent = await register_agent(agent_data, request=request, _user=admin_user)
-    steps.append({"step": 1, "action": "Agent Registered", "details": f"Agent '{agent['name']}' registered with {agent['collateral_amount']} AVAX collateral", "agent_id": agent["id"]})
+    # register_agent(body: AgentCreate, request: Request)
+    agent_reg_res = await register_agent(agent_data, request=request)
+    agent_id = agent_reg_res["agent_id"]
+    agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
+
+    steps.append({"step": 1, "action": "Agent Registered", "details": f"Agent '{agent['name']}' registered with {agent.get('collateral_amount', 0.1)} USD collateral", "agent_id": agent_id})
 
     # Step 2: Submit valid execution
-    exec_data = ExecutionRequestCreate(agent_id=agent["id"], action="swap", target_address="0x" + secrets.token_hex(20), value=2.5, chain_id="43113")
+    exec_data = ExecutionRequestCreate(agent_id=agent_id, action="swap", target_address="0x" + secrets.token_hex(20), value=2.5, chain_id="43113")
     execution = await create_execution_request(exec_data)
-    steps.append({"step": 2, "action": "Execution Completed", "details": f"Swap of 2.5 AVAX executed successfully. Fee: {execution['fee_deducted']} AVAX", "execution_id": execution["id"], "status": execution["status"]})
+    steps.append({"step": 2, "action": "Execution Completed", "details": f"Swap of 2.5 USD executed successfully. Fee: {execution['fee_deducted']} USD", "execution_id": execution["id"], "status": execution["status"]})
 
     # Step 3: Submit another valid execution
-    exec_data2 = ExecutionRequestCreate(agent_id=agent["id"], action="transfer", target_address="0x" + secrets.token_hex(20), value=1.0, chain_id="43113")
+    exec_data2 = ExecutionRequestCreate(agent_id=agent_id, action="transfer", target_address="0x" + secrets.token_hex(20), value=1.0, chain_id="43113")
     execution2 = await create_execution_request(exec_data2)
-    steps.append({"step": 3, "action": "Execution Completed", "details": f"Transfer of 1.0 AVAX executed. Fee: {execution2['fee_deducted']} AVAX", "execution_id": execution2["id"], "status": execution2["status"]})
+    steps.append({"step": 3, "action": "Execution Completed", "details": f"Transfer of 1.0 USD executed. Fee: {execution2['fee_deducted']} USD", "execution_id": execution2["id"], "status": execution2["status"]})
 
     # Step 4: Submit deviation (value exceeds risk envelope)
     # First unfreeze agent if frozen and re-check
-    await db.agents.update_one({"id": agent["id"]}, {"$set": {"status": "active"}})
-    exec_data3 = ExecutionRequestCreate(agent_id=agent["id"], action="liquidate", target_address="0x" + secrets.token_hex(20), value=15.0, chain_id="43113")
+    await db.agents.update_one({"id": agent_id}, {"$set": {"status": "active"}})
+    exec_data3 = ExecutionRequestCreate(agent_id=agent_id, action="liquidate", target_address="0x" + secrets.token_hex(20), value=150.0, chain_id="43113")
     execution3 = await create_execution_request(exec_data3)
     steps.append({"step": 4, "action": "Deviation Detected", "details": f"Action 'liquidate' outside risk envelope. Agent FROZEN.", "execution_id": execution3["id"], "status": execution3["status"]})
 
     # Step 5: Slash collateral
     slash_result = await slash_agent(
-        agent["id"],
+        agent_id,
         SlashRequest(reason="Repeated deviation from declared mission intent"),
         request=request,
         admin_user=admin_user,
     )
-    steps.append({"step": 5, "action": "Collateral Slashed", "details": f"Slashed {slash_result['collateral_slashed']} AVAX. Remaining: {slash_result['collateral_remaining']} AVAX"})
+    steps.append({"step": 5, "action": "Collateral Slashed", "details": f"Slashed {slash_result['collateral_slashed']} USD. Remaining: {slash_result['collateral_remaining']} USD"})
 
     # Get final agent state
     final_agent = await db.agents.find_one({"id": agent["id"]}, {"_id": 0})
@@ -1389,7 +1407,7 @@ async def get_all_scores():
 @api_router.post("/underwriters/register")
 async def register_underwriter(body: UnderwriterCreate, request: Request, _user: Dict[str, Any] = Depends(require_authenticated_user)):
     if body.capital_amount < 0.5:
-        raise HTTPException(400, "Minimum capital is 0.5 AVAX")
+        raise HTTPException(400, "Minimum capital is 0.5 USD")
     if body.wallet_address and not is_valid_evm_address(body.wallet_address):
         raise HTTPException(400, "Invalid wallet address format")
     uw = {
@@ -1787,13 +1805,14 @@ async def simulate_full_lifecycle(body: AgentThinkRequest):
 
     permit_bundle = None
     tx_hash = None
-    final_status = "approved"
-    score_before = _normalize_score(agent)["score"]
+    final_status = "completed"
+    score_payload_before = await _normalize_score(agent)
+    score_before = score_payload_before["score"]
 
     if validation["valid"]:
         nonce = int(agent.get("runtime_nonce", 0)) + 1
-        permit_bundle = generate_structured_permit(body.agent_address, intent.action, intent.target, intent.value_avax, nonce)
-        permit_ok = verify_structured_permit(permit_bundle["permit"], permit_bundle["signature"], body.agent_address)
+        permit_bundle = generate_permit(body.agent_address, intent.action, intent.target, intent.value_usd, nonce)
+        permit_ok = verify_permit(permit_bundle["permit"], permit_bundle["signature"], body.agent_address)
         lifecycle.append({
             "stage": 4,
             "name": "permit",
@@ -1819,7 +1838,7 @@ async def simulate_full_lifecycle(body: AgentThinkRequest):
                     "agent_name": agent["name"],
                     "action": intent.action,
                     "target_address": intent.target,
-                    "value": intent.value_avax,
+            "value": intent.value_usd,
                     "permit": permit_bundle,
                     "tx_hash": None,
                     "status": final_status,
@@ -1836,20 +1855,20 @@ async def simulate_full_lifecycle(body: AgentThinkRequest):
                 "intent": intent.model_dump(),
                 "lifecycle": lifecycle,
                 "permit": permit_bundle,
-                "avaira_score": _normalize_score(latest),
+                "avaira_score": await _normalize_score(latest),
             }
 
-        tx_hash = "0x" + hashlib.sha256(f"{body.agent_address}:{nonce}:{intent.action}:{intent.target}:{intent.value_avax}".encode()).hexdigest()
+        tx_hash = "0x" + hashlib.sha256(f"{body.agent_address}:{nonce}:{intent.action}:{intent.target}:{intent.value_usd}".encode()).hexdigest()
         lifecycle.append({
             "stage": 5,
             "name": "execute",
             "status": "completed",
-            "details": {"tx_hash": tx_hash, "network": "fuji", "explorer": f"https://testnet.snowtrace.io/tx/{tx_hash}"},
+            "details": {"tx_hash": tx_hash, "network": "fuji", "explorer": f"https://avaira.xyz/audit/tx/{tx_hash}"},
         })
 
-        fee = round(intent.value_avax * PROTOCOL_FEE_RATE, 6)
+        fee = round(intent.value_usd * PROTOCOL_FEE_RATE, 6)
         await record_treasury_transaction(tx_hash, fee)
-        lifecycle.append({"stage": 6, "name": "fee_deducted", "status": "completed", "details": {"fee_avax": fee}})
+        lifecycle.append({"stage": 6, "name": "fee_deducted", "status": "completed", "details": {"fee_usd": fee}})
 
         new_score = min(100, score_before + 8)
         await db.agents.update_one(
@@ -1895,7 +1914,7 @@ async def simulate_full_lifecycle(body: AgentThinkRequest):
             "agent_name": agent["name"],
             "action": intent.action,
             "target_address": intent.target,
-            "value": intent.value_avax,
+            "value": intent.value_usd,
             "permit": permit_bundle,
             "tx_hash": tx_hash,
             "status": final_status,
@@ -1913,30 +1932,13 @@ async def simulate_full_lifecycle(body: AgentThinkRequest):
         "intent": intent.model_dump(),
         "lifecycle": lifecycle,
         "permit": permit_bundle,
-        "avaira_score": _normalize_score(latest),
+        "avaira_score": await _normalize_score(latest),
     }
 
 
 @api_router.get("/agent/leaderboard")
 async def agent_leaderboard():
-    agents = await db.agents.find({"wallet_address": {"$exists": True}}, {"_id": 0}).sort("avaira_score", -1).to_list(10)
-    leaderboard = []
-    for agent in agents:
-        score_payload = _normalize_score(agent)
-        leaderboard.append(
-            {
-                "agent_id": agent.get("id"),
-                "wallet_address": agent.get("wallet_address"),
-                "name": agent.get("name"),
-                "status": agent.get("status", "pending"),
-                "collateral": agent.get("collateral_remaining", agent.get("collateral_amount", 0)),
-                "avaira_score": score_payload["score"],
-                "grade": score_payload["grade"],
-                "successful_executions": agent.get("successful_executions", 0),
-                "total_executions": agent.get("total_executions", 0),
-            }
-        )
-    return leaderboard
+    return await get_leaderboard()
 
 # ─── NEURAL INTENT VALIDATION ───────────────────────────────────
 class IntentValidateRequest(BaseModel):
