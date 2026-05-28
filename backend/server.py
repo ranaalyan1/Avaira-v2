@@ -1838,7 +1838,7 @@ async def simulate_full_lifecycle(body: AgentThinkRequest):
                     "agent_name": agent["name"],
                     "action": intent.action,
                     "target_address": intent.target,
-            "value": intent.value_usd,
+                    "value": intent.value_usd,
                     "permit": permit_bundle,
                     "tx_hash": None,
                     "status": final_status,
