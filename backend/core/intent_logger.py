@@ -200,3 +200,20 @@ class IntentLogger:
             expected_prev = entry["intent_hash"]
 
         return VerifyResult(valid=True, entries=count)
+
+    async def get_audit_trail(self, agent_id: str, start_date: datetime, end_date: datetime) -> List[LogEntry]:
+        """
+        Retrieves the audit trail for a specific agent within a time range.
+        """
+        cursor = self.collection.find({
+            "agent_id": agent_id,
+            "issuanceDate": {
+                "$gte": start_date.isoformat(),
+                "$lte": end_date.isoformat()
+            }
+        }).sort("issuanceDate", -1)
+
+        results = []
+        async for doc in cursor:
+            results.append(LogEntry(**doc))
+        return results

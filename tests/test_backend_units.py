@@ -86,58 +86,58 @@ class TestRuntimeRiskEnvelope:
 
 class TestAvairaAgent:
     def _agent(self, envelope=None):
-        return AvairaAgent(AGENT_ADDR, envelope or BASIC_ENVELOPE, "Maximise AVAX yield safely")
+        return AvairaAgent(AGENT_ADDR, envelope or BASIC_ENVELOPE, "Maximise USD yield safely")
 
     def test_validate_within_envelope(self):
         agent = self._agent()
-        intent = ExecutionIntent(action="transfer", target=TARGET_ADDR, value_avax=0.5, rationale="test", confidence=0.7)
+        intent = ExecutionIntent(action="transfer", target=TARGET_ADDR, value_usd=0.5, rationale="test", confidence=0.7)
         result = agent.validate(intent)
         assert result["valid"] is True
 
     def test_validate_exceeds_max_tx(self):
         agent = self._agent()
-        intent = ExecutionIntent(action="transfer", target=TARGET_ADDR, value_avax=2.0, rationale="test", confidence=0.7)
+        intent = ExecutionIntent(action="transfer", target=TARGET_ADDR, value_usd=2.0, rationale="test", confidence=0.7)
         result = agent.validate(intent)
         assert result["valid"] is False
         assert "max_tx_value" in result["reason"]
 
     def test_validate_disallowed_action(self):
         agent = self._agent({"max_tx_value": 1.0, "allowed_actions": ["transfer"]})
-        intent = ExecutionIntent(action="stake", target=TARGET_ADDR, value_avax=0.1, rationale="test", confidence=0.6)
+        intent = ExecutionIntent(action="stake", target=TARGET_ADDR, value_usd=0.1, rationale="test", confidence=0.6)
         result = agent.validate(intent)
         assert result["valid"] is False
         assert "not allowed" in result["reason"]
 
     def test_planned_intent_bull_signal_picks_stake(self):
         agent = self._agent()
-        ctx = {"target": TARGET_ADDR, "suggested_value_avax": 0.5, "market_signal": "bull run"}
+        ctx = {"target": TARGET_ADDR, "suggested_value_usd": 0.5, "market_signal": "bull run"}
         intent = agent._planned_intent(ctx, [])
         assert intent.action == "stake"
-        assert intent.value_avax <= BASIC_ENVELOPE["max_tx_value"]
+        assert intent.value_usd <= BASIC_ENVELOPE["max_tx_value"]
         assert 0 <= intent.confidence <= 1
 
     def test_planned_intent_volatile_picks_swap(self):
         agent = self._agent()
-        ctx = {"target": TARGET_ADDR, "suggested_value_avax": 0.3, "market_signal": "volatile"}
+        ctx = {"target": TARGET_ADDR, "suggested_value_usd": 0.3, "market_signal": "volatile"}
         intent = agent._planned_intent(ctx, [])
         assert intent.action == "swap"
 
     def test_planned_intent_clamps_value_to_max(self):
         agent = self._agent()
-        ctx = {"target": TARGET_ADDR, "suggested_value_avax": 999.0, "market_signal": "neutral"}
+        ctx = {"target": TARGET_ADDR, "suggested_value_usd": 999.0, "market_signal": "neutral"}
         intent = agent._planned_intent(ctx, [])
-        assert intent.value_avax <= BASIC_ENVELOPE["max_tx_value"]
+        assert intent.value_usd <= BASIC_ENVELOPE["max_tx_value"]
 
     def test_confidence_increases_with_history(self):
         agent = self._agent()
-        ctx = {"target": TARGET_ADDR, "suggested_value_avax": 0.2, "market_signal": "neutral"}
+        ctx = {"target": TARGET_ADDR, "suggested_value_usd": 0.2, "market_signal": "neutral"}
         no_history = agent._planned_intent(ctx, [])
         with_history = agent._planned_intent(ctx, [{"prior": True}, {"prior": True}])
         assert with_history.confidence >= no_history.confidence
 
     def test_execute_cycle_approved(self):
         agent = self._agent()
-        ctx = {"target": TARGET_ADDR, "suggested_value_avax": 0.2, "market_signal": "neutral"}
+        ctx = {"target": TARGET_ADDR, "suggested_value_usd": 0.2, "market_signal": "neutral"}
         result = asyncio.run(agent.execute_cycle(ctx, []))
         assert result["status"] == "approved"
         assert result["permit_needed"] is True
@@ -145,7 +145,7 @@ class TestAvairaAgent:
 
     def test_execute_cycle_rejected_over_limit(self):
         agent = self._agent({"max_tx_value": 0.01, "allowed_actions": ["transfer"]})
-        ctx = {"target": TARGET_ADDR, "suggested_value_avax": 1.0, "market_signal": "neutral"}
+        ctx = {"target": TARGET_ADDR, "suggested_value_usd": 1.0, "market_signal": "neutral"}
         result = asyncio.run(agent.execute_cycle(ctx, []))
         # value is clamped to max_tx_value by _planned_intent, so it should be approved
         assert result["status"] in ("approved", "rejected")

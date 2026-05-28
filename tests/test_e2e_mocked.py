@@ -30,7 +30,10 @@ async def test_e2e_pivot_flow_mocked():
     mock_db.slash_events.count_documents = AsyncMock(return_value=0)
     mock_db.executions.count_documents = AsyncMock(return_value=0)
 
-    with patch('backend.server.db', mock_db),          patch('backend.server.intent_logger', MagicMock()),          patch('backend.server.avaira_validator', AsyncMock()),          patch('backend.server.slash_engine', AsyncMock()),          patch('backend.server.reputation_engine', AsyncMock()),          patch('backend.server.require_authenticated_user', return_value={"user_id": "u1", "email": "a@b.com"}),          patch('anthropic.Anthropic'):
+    mock_ape = MagicMock()
+    mock_ape.sync_threat_intelligence = AsyncMock(return_value=[])
+
+    with patch('backend.server.db', mock_db),          patch('backend.server.intent_logger', MagicMock()),          patch('backend.server.avaira_validator', AsyncMock()),          patch('backend.server.slash_engine', AsyncMock()),          patch('backend.server.reputation_engine', AsyncMock()),          patch('backend.server.ape_engine', mock_ape),          patch('backend.server.agent_vault', AsyncMock()),          patch('backend.server.require_authenticated_user', return_value={"user_id": "u1", "email": "a@b.com"}),          patch('anthropic.Anthropic'):
 
         from backend.server import register_agent, agent_run, AgentCreate, AgentRunRequest, RiskEnvelope
 

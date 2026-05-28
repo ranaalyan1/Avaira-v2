@@ -80,7 +80,7 @@ class AvairaValidator:
             latency_ms=int((time.time() - start_pipeline) * 1000)
         )
 
-    async def deep_neural_audit(self, intent: dict, risk_envelope: dict, audit_id: str) -> ValidationStage:
+    async def deep_neural_audit(self, intent: dict, risk_envelope: dict, audit_id: str, db=None) -> ValidationStage:
         """
         STAGE 2: Deep Neural Audit (Async/Parallel)
         Deep compliance check using Claude 3.5.
@@ -96,12 +96,21 @@ class AvairaValidator:
             compliance_data = self._extract_json(compliance_resp.content[0].text)
 
             approved = compliance_data.get("approved", False)
-            return ValidationStage(
+            findings = compliance_data.get("reasoning", "Audit complete")
+            stage_res = ValidationStage(
                 stage="neural_audit",
                 approved=approved,
-                findings=compliance_data.get("reasoning", "Audit complete"),
+                findings=findings,
                 latency_ms=int((time.time() - start_time) * 1000)
             )
+
+            if db is not None:
+                await db.executions.update_one(
+                    {"audit_id": audit_id},
+                    {"$push": {"lifecycle": stage_res.model_dump()}}
+                )
+
+            return stage_res
         except Exception as e:
             return ValidationStage(stage="neural_audit", approved=False, findings=str(e), latency_ms=0)
 
