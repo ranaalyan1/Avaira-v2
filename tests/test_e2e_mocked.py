@@ -52,12 +52,12 @@ async def test_e2e_pivot_flow_mocked():
             run_res = await agent_run(agent_id, AgentRunRequest(task="Safe"), mock_agents[0])
             assert run_res["execution"]["status"] == "completed"
 
-        # 3. Simulate deviation/suspension in mock
-        mock_agents[0]["status"] = "suspended"
+        # 3. Simulate deviation/freeze in mock
+        mock_agents[0]["status"] = "frozen"
 
         # 4. Verify blocked
         from fastapi import HTTPException
-        # _get_agent_from_key is where suspension is checked
+        # _get_agent_from_key is where status is checked
         # We manually call it with a mock request
         mock_request = MagicMock()
         mock_request.headers = {"X-Avaira-API-Key": api_key}
@@ -69,7 +69,7 @@ async def test_e2e_pivot_flow_mocked():
             await _get_agent_from_key(mock_request)
 
         assert excinfo.value.status_code == 403
-        assert "suspended" in excinfo.value.detail.lower()
+        assert "frozen" in excinfo.value.detail.lower()
 
 if __name__ == "__main__":
     asyncio.run(test_e2e_pivot_flow_mocked())
