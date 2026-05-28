@@ -190,9 +190,9 @@ export default function AgentDashboard() {
           </div>
         </div>
 
-        <div className="cyber-card p-5">
+        <div className="cyber-card p-5 hologram-effect">
           <div className="flex items-center gap-2 mb-4">
-            <Radar size={16} className="text-avaira-primary" />
+            <Radar size={16} className="text-avaira-primary animate-pulse" />
             <h3 className="font-heading text-sm uppercase tracking-[0.18em] text-avaira-muted">Intent Output</h3>
           </div>
           {intentResult?.intent ? (
@@ -237,7 +237,7 @@ export default function AgentDashboard() {
       </div>
 
       <div className="space-y-6">
-        <div className="cyber-card p-5">
+        <div className="cyber-card p-5 depth-mini-panel">
           <div className="flex items-center gap-2 mb-4">
             <Trophy size={16} className="text-avaira-primary" />
             <h3 className="font-heading text-sm uppercase tracking-[0.18em] text-avaira-muted">Live Agent Leaderboard</h3>
@@ -273,7 +273,7 @@ export default function AgentDashboard() {
           )}
         </div>
 
-        <div className="cyber-card p-5">
+        <div className="cyber-card p-5 data-stream-container">
           <div className="flex items-center gap-2 mb-4">
             <ShieldAlert size={16} className="text-avaira-primary" />
             <h3 className="font-heading text-sm uppercase tracking-[0.18em] text-avaira-muted">Lifecycle Timeline</h3>
@@ -281,7 +281,7 @@ export default function AgentDashboard() {
           {lifecycleResult?.lifecycle?.length ? (
             <div className="space-y-3">
               {lifecycleResult.lifecycle.map((step) => (
-                <div key={`${step.stage}-${step.name}`} className="border border-avaira-border p-3 bg-avaira-surface/50 animate-slide-in">
+                <div key={`${step.stage}-${step.name}`} className="border border-avaira-border p-3 bg-avaira-surface/50 animate-slide-in hologram-effect">
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-heading text-sm uppercase tracking-[0.18em] text-foreground">{step.stage}. {step.name.replace(/_/g, " ")}</p>
                     <StatusBadge status={step.status === "failed" ? "rejected" : step.status} />

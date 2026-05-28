@@ -9,7 +9,7 @@ import AgentDashboard from "@/components/AgentDashboard";
 import TrustHeatmap from "@/components/TrustHeatmap";
 
 const StatCard = ({ icon: Icon, label, value, color, delay }) => (
-  <div className={`cyber-card p-4 animate-slide-in stagger-${delay}`} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
+  <div className={`cyber-card p-4 animate-slide-in stagger-${delay} depth-mini-panel hover:glow-red transition-all`} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
     <div className="flex items-center gap-3">
       <div className={`p-2 border`} style={{ borderColor: `${color}40`, background: `${color}10` }}>
         <Icon size={16} strokeWidth={1.5} style={{ color }} />
@@ -147,7 +147,7 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-1 max-h-80 overflow-y-auto">
               {activity.map((item, i) => (
-                <div key={item.id + i} className="flex items-center gap-3 p-2 hover:bg-white/[0.02] transition-colors" data-testid={`activity-item-${i}`}>
+                <div key={item.id + i} className={`flex items-center gap-3 p-2 hover:bg-white/[0.02] transition-colors animate-slide-in stagger-${(i % 5) + 1}`} data-testid={`activity-item-${i}`}>
                   <div className={`status-dot ${item.status === 'completed' ? 'active' : item.status === 'freeze' || item.status === 'rejected_deviation' ? 'frozen' : 'paused'}`} />
                   <div className="flex-1 min-w-0">
                     <p className="font-mono text-xs text-foreground truncate">{item.description}</p>

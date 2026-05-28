@@ -52,6 +52,16 @@ module.exports = {
                 'glow-pulse': { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0.5' } },
                 'scan': { '0%': { transform: 'translateY(-100%)' }, '100%': { transform: 'translateY(100%)' } },
                 'slide-in': { '0%': { opacity: '0', transform: 'translateY(8px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                'floating': { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
+                'glitch': {
+                    '0%': { transform: 'translate(0)' },
+                    '20%': { transform: 'translate(-2px, 2px)' },
+                    '40%': { transform: 'translate(-2px, -2px)' },
+                    '60%': { transform: 'translate(2px, 2px)' },
+                    '80%': { transform: 'translate(2px, -2px)' },
+                    '100%': { transform: 'translate(0)' },
+                },
+                'hologram': { '0%, 100%': { opacity: '0.8' }, '50%': { opacity: '0.4' }, '70%': { opacity: '0.9' } },
             },
             animation: {
                 'accordion-down': 'accordion-down 0.2s ease-out',
@@ -59,6 +69,9 @@ module.exports = {
                 'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
                 'scan': 'scan 4s linear infinite',
                 'slide-in': 'slide-in 0.3s ease-out',
+                'floating': 'floating 3s ease-in-out infinite',
+                'glitch': 'glitch 0.2s ease-in-out infinite',
+                'hologram': 'hologram 2s ease-in-out infinite',
             }
         }
     },
