@@ -98,6 +98,16 @@ async def test_v2_full_integration():
         agent.validator.rules = AsyncMock()
         agent.validator.rules.evaluate.return_value = MagicMock(allow=True, violations=[])
 
+        # Mock Sentinel and ZK-Vault
+        agent.sentinel = AsyncMock()
+        agent.sentinel.analyze_drift.return_value = MagicMock(
+            model_dump=lambda: {"drift_score": 0.1, "trend": "stable", "predicted_violation": None, "recommendation": "Proceed."}
+        )
+        agent.zk_vault = AsyncMock()
+        agent.zk_vault.generate_compliance_proof.return_value = MagicMock(
+            model_dump=lambda: {"proof_type": "Groth16", "circuit_name": "RiskEnvelopeCompliance", "public_inputs": {}, "proof_data": "0x123", "verifiable": True}
+        )
+
         # 4. Mock think to avoid another LLM call
         agent.think = AsyncMock(return_value=MagicMock(
             action="search",
@@ -115,6 +125,10 @@ async def test_v2_full_integration():
         assert result.execution["status"] == "completed"
         assert len(db.intent_logs.data) == 1
         assert len(db.executions.data) == 1
+
+        # Verify Sentinel and ZK-Vault were called
+        agent.sentinel.analyze_drift.assert_called_once()
+        agent.zk_vault.generate_compliance_proof.assert_called_once()
 
         # 6. Verify Hash Chain
         logger = IntentLogger(db_client=db)
