@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package avaira.trust.v1;
+
+service TrustEngine {
+  rpc ValidateIntent(ValidateIntentRequest) returns (ValidateIntentResponse);
+  rpc LogIntent(LogIntentRequest) returns (LogIntentResponse);
+  rpc GetAvairaScore(GetAvairaScoreRequest) returns (GetAvairaScoreResponse);
+}
+
+message RiskEnvelope {
+  double max_spend_usd = 1;
+  repeated string allowed_actions = 2;
+  repeated string blocked_actions = 3;
+}
+
+message Intent {
+  string action = 1;
+  string target = 2;
+  double value_usd = 3;
+  string agent_id = 4;
+}
+
+message ValidateIntentRequest {
+  Intent intent = 1;
+  RiskEnvelope envelope = 2;
+}
+
+message ValidateIntentResponse {
+  bool valid = 1;
+  string error_message = 2;
+}
+
+message LogIntentRequest {
+  Intent intent = 1;
+  string prev_hash = 2;
+}
+
+message LogIntentResponse {
+  string intent_hash = 1;
+  string merkle_root = 2;
+}
+
+message GetAvairaScoreRequest {
+  string agent_id = 1;
+}
+
+message GetAvairaScoreResponse {
+  double score = 1;
+  string grade = 2;
+}
