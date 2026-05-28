@@ -22,7 +22,7 @@ The Python SDK (`avaira-shield-sdk`) provides seamless "2-line" protection for c
 ## Recommendations for Improvement
 
 ### 1. Terminology Standardization
-There is some overlap between `frozen` and `suspended` statuses. I recommend standardizing on `frozen` as the primary state for agents blocked due to policy violations, as it aligns with the `FreezeSlash` contract terminology.
+The documentation should consistently use `frozen` as the status for agents blocked due to policy violations or slashing, in alignment with the `FreezeSlash` contract terminology.
 
 ### 2. Validator Consolidation
 The project contains two validator implementations:
