@@ -31,7 +31,7 @@ The project contains two validator implementations:
 The core backend uses `backend/core/validator.py`. I recommend deprecating or consolidating `ai_validator.py` to avoid confusion.
 
 ### 3. Test Robustness
-`tests/test_e2e_flow.py` currently requires a live MongoDB instance, which can cause CI failures in isolated environments. I have verified that `test_e2e_mocked.py` provides equivalent coverage using mocks and recommend adopting this pattern for all E2E tests.
+`tests/test_e2e_flow.py` currently requires a live MongoDB instance, which can cause CI failures in isolated environments. `test_e2e_mocked.py` is a useful mock-based complement for exercising backend logic without external dependencies, but it does not fully cover the FastAPI/TestClient route flow in `tests/test_e2e_flow.py`. I recommend using this pattern to improve CI reliability while retaining route-level coverage for true end-to-end behavior.
 
 ### 4. Environment Safety
 The `database_guard` middleware is a good safety measure, but ensured database indexes are only created once at startup.
