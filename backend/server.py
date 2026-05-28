@@ -1552,8 +1552,8 @@ async def _get_agent_from_key(request: Request):
 
     if not agent:
         raise HTTPException(401, "Invalid API Key")
-    if agent.get("status") in ["frozen", "suspended"]:
-        raise HTTPException(403, f"Agent is {agent.get('status')} due to a policy violation")
+    if agent.get("status") == "frozen":
+        raise HTTPException(403, f"Agent is frozen due to a policy violation")
     return agent
 
 @api_router.post("/agents/{agent_id}/run")
