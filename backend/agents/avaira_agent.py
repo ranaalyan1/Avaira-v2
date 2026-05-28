@@ -7,11 +7,22 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List
 from pydantic import BaseModel
 
-from core.validator import AvairaValidator
-from core.intent_logger import IntentLogger
-from core.reputation import ReputationEngine
-from core.slash_engine import SlashEngine, SlashDecision
-from core.shadow_env import ShadowEnvironment
+try:
+    from core.validator import AvairaValidator
+    from core.intent_logger import IntentLogger
+    from core.reputation import ReputationEngine
+    from core.slash_engine import SlashEngine, SlashDecision
+    from core.shadow_env import ShadowEnvironment
+    from core.sentinel import AvairaSentinel
+    from core.zk_vault import ZKAuditVault
+except ImportError:
+    from ..core.validator import AvairaValidator
+    from ..core.intent_logger import IntentLogger
+    from ..core.reputation import ReputationEngine
+    from ..core.slash_engine import SlashEngine, SlashDecision
+    from ..core.shadow_env import ShadowEnvironment
+    from ..core.sentinel import AvairaSentinel
+    from ..core.zk_vault import ZKAuditVault
 
 class ExecutionIntent(BaseModel):
     action: str
@@ -39,6 +50,8 @@ class AvairaAgent:
         self.reputation = ReputationEngine(db_client=db_client)
         self.slash_engine = SlashEngine(db_client=db_client)
         self.shadow_env = ShadowEnvironment()
+        self.sentinel = AvairaSentinel(db_client=db_client)
+        self.zk_vault = ZKAuditVault()
         self.db = db_client
 
     async def think(self, task: str) -> ExecutionIntent:
@@ -87,7 +100,12 @@ class AvairaAgent:
         # We use fast_shield_pass which calls OPA/Rego and fast SLM
         validation = await self.validator.fast_shield_pass(intent_dict, self.risk_envelope)
 
+        # 2b. Avaira Sentinel (Predictive Shielding)
+        # Analyze behavioral drift to predict violations before they happen
+        drift_analysis = await self.sentinel.analyze_drift(self.agent_id, intent_dict)
+
         execution_outcome = {}
+        zk_proof = None
         if not validation.approved:
             # Kill execution instantly if OPA fails
             execution_outcome = {
@@ -120,6 +138,13 @@ class AvairaAgent:
                     "value": intent.estimated_value,
                     "provisioned_creds": provisioned_creds
                 }
+
+                # 5b. ZK-Audit Vault (Zero-Knowledge Compliance)
+                # Generate proof that execution followed rules without revealing private data
+                proof = await self.zk_vault.generate_compliance_proof(
+                    intent_dict, self.risk_envelope, validation.audit_id
+                )
+                zk_proof = proof.model_dump()
 
                 # 6. Asynchronous Neural Audit & Scoring (Background process)
                 asyncio.create_task(
@@ -157,6 +182,8 @@ class AvairaAgent:
             "task": task,
             "intent": intent_dict,
             "validation": val_dict,
+            "drift_analysis": drift_analysis.model_dump(),
+            "zk_proof": zk_proof,
             "lifecycle": validation.stages, # Pass stages to frontend
             "status": execution_outcome["status"],
             "value": intent.estimated_value,

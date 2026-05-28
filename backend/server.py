@@ -36,6 +36,11 @@ try:
     from core.slash_engine import SlashEngine
     from core.reputation import ReputationEngine
     from core.agent_vault import AgentVault
+    from core.sentinel import AvairaSentinel
+    from core.zk_vault import ZKAuditVault
+    from core.ape_engine import AutonomousPolicyEvolution
+    from core.tee_identity import TEEIdentityManager
+    from core.marketplace import TrustMarketplace
     from agents.avaira_agent import AvairaAgent as RealAvairaAgent
 except ImportError:
     from .core.intent_logger import IntentLogger
@@ -43,6 +48,11 @@ except ImportError:
     from .core.slash_engine import SlashEngine
     from .core.reputation import ReputationEngine
     from .core.agent_vault import AgentVault
+    from .core.sentinel import AvairaSentinel
+    from .core.zk_vault import ZKAuditVault
+    from .core.ape_engine import AutonomousPolicyEvolution
+    from .core.tee_identity import TEEIdentityManager
+    from .core.marketplace import TrustMarketplace
     from .agents.avaira_agent import AvairaAgent as RealAvairaAgent
 
 ROOT_DIR = Path(__file__).parent
@@ -68,6 +78,11 @@ avaira_validator = AvairaValidator()
 slash_engine = SlashEngine(db_client=db)
 reputation_engine = ReputationEngine(db_client=db)
 agent_vault = AgentVault()
+avaira_sentinel = AvairaSentinel(db_client=db)
+zk_vault = ZKAuditVault()
+ape_engine = AutonomousPolicyEvolution(db_client=db)
+tee_identity_manager = TEEIdentityManager()
+trust_marketplace = TrustMarketplace(db_client=db)
 
 # ─── PROTOCOL CONSTANTS ─────────────────────────────────────────
 PROTOCOL_FEE_RATE = 0.005  # 0.5%
@@ -729,10 +744,14 @@ async def register_agent(body: AgentCreate, request: Request):
     # Generate Virtual Vault Card for Chainless Spend
     vault_card = await agent_vault.generate_virtual_card(agent_id, body.risk_envelope.max_spend_usd)
 
+    # Generate Hardware-Anchored Identity (TEE-DID)
+    did_doc = tee_identity_manager.generate_agent_did(agent_id, api_key_hash)
+
     agent = {
         "id": agent_id,
         "api_key_hash": api_key_hash,
         "user_id": user_id,
+        "did_doc": did_doc.model_dump(),
         "name": body.name,
         "goal": body.goal,
         "risk_envelope": body.risk_envelope.model_dump(),
@@ -746,6 +765,9 @@ async def register_agent(body: AgentCreate, request: Request):
         "registered_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.agents.insert_one(agent)
+
+    # Initial Autonomous Policy Evolution (APE) sync
+    await ape_engine.sync_threat_intelligence(agent_id)
 
     agent.pop("_id", None)
     return {"agent_id": agent_id, "api_key": api_key}
@@ -950,6 +972,10 @@ async def slash_agent(agent_id: str, body: SlashRequest, request: Request, admin
     await db.freeze_events.insert_one(event)
 
     await update_reputation(agent_id, -REP_SLASH_PENALTY, f"Slashed: {body.reason}")
+
+    # Trigger Marketplace Slashing Bridge (Economic Finality)
+    await trust_marketplace.trigger_slashing_bridge(agent_id, body.reason, "high")
+
     await record_admin_audit("agent_slash", admin_user, request, {"agent_id": agent_id, "reason": body.reason, "amount": slash_amount})
     event.pop("_id", None)
     return {**event, "collateral_remaining": new_collateral}
@@ -1644,6 +1670,48 @@ async def get_agent_audit(agent_id: str, agent: Dict = Depends(_get_agent_from_k
                                                datetime.now(timezone.utc))
     return [e.model_dump() for e in trail]
 
+@api_router.get("/executions/{execution_id}/zk-proof")
+async def get_execution_zk_proof(execution_id: str):
+    ex = await db.executions.find_one({"id": execution_id})
+    if not ex:
+        raise HTTPException(404, "Execution not found")
+
+    proof = ex.get("zk_proof")
+    if not proof:
+        raise HTTPException(404, "ZK-proof not found for this execution")
+
+    return proof
+
+@api_router.get("/agents/{agent_id}/drift")
+async def get_agent_drift(agent_id: str, agent: Dict = Depends(_get_agent_from_key)):
+    if agent["id"] != agent_id:
+        raise HTTPException(403, "API Key does not match agent ID")
+
+    # Return the drift analysis from the latest execution
+    last_exec = await db.executions.find_one(
+        {"agent_id": agent_id},
+        sort=[("timestamp", -1)]
+    )
+
+    if not last_exec or "drift_analysis" not in last_exec:
+        # Fallback to a fresh analysis if no history in executions
+        # In a real app, we might store the current 'drift state' in the agent record
+        return await avaira_sentinel.analyze_drift(agent_id, {"task": "periodic_check"})
+
+    return last_exec["drift_analysis"]
+
+class InsuranceRequest(BaseModel):
+    agent_id: str
+    underwriter_id: str
+    coverage_amount: float
+
+@api_router.post("/marketplace/insurance")
+async def issue_insurance(body: InsuranceRequest, _user: Dict[str, Any] = Depends(require_authenticated_user)):
+    policy = await trust_marketplace.issue_policy(
+        body.agent_id, body.underwriter_id, body.coverage_amount
+    )
+    return policy.model_dump()
+
 @api_router.post("/agents/{agent_id}/slash")
 async def slash_agent_internal(agent_id: str, request: Request):
     admin_key = request.headers.get("X-Avaira-Admin-Key")
@@ -1651,7 +1719,14 @@ async def slash_agent_internal(agent_id: str, request: Request):
         raise HTTPException(401, "Unauthorized admin action")
 
     body = await request.json()
-    result = await slash_engine.slash(agent_id, body.get("reason", "manual"), body.get("severity", "medium"))
+    reason = body.get("reason", "manual")
+    severity = body.get("severity", "medium")
+
+    result = await slash_engine.slash(agent_id, reason, severity)
+
+    # Trigger Marketplace Slashing Bridge
+    await trust_marketplace.trigger_slashing_bridge(agent_id, reason, severity)
+
     return result.model_dump()
 
 @api_router.get("/agents/{agent_id}/slash-history")
