@@ -24,6 +24,8 @@ const StatusBadge = ({ status }) => {
 
 const AgentCard = ({ agent, onRefresh, scores, canManage }) => {
   const score = scores.find(s => s.agent_id === agent.id);
+  const isFrozen = agent.status === "frozen";
+
   const handleToggleStatus = async () => {
     const newStatus = agent.status === "active" ? "paused" : "active";
     if (agent.status === "frozen") return toast.error("Cannot change status of frozen agent");
@@ -40,10 +42,18 @@ const AgentCard = ({ agent, onRefresh, scores, canManage }) => {
   };
 
   return (
-    <div className="cyber-card corner-cut p-4" data-testid={`agent-card-${agent.id}`}>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-heading font-bold text-base text-foreground uppercase tracking-tight">{agent.name}</h3>
-        <div className="flex items-center gap-2">
+    <div className={`cyber-card corner-cut p-4 animate-floating ${isFrozen ? 'animate-glitch' : ''}`} data-testid={`agent-card-${agent.id}`}>
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="agent-avatar-container hologram-effect">
+            <div className={`agent-avatar-hologram animate-hologram ${isFrozen ? 'bg-avaira-red' : 'bg-avaira-primary'}`} />
+          </div>
+          <div>
+            <h3 className={`font-heading font-bold text-base text-foreground uppercase tracking-tight ${isFrozen ? 'glitch-text text-avaira-red' : ''}`}>{agent.name}</h3>
+            <p className="font-mono text-[10px] text-avaira-dim">ID: {agent.id.slice(0, 8)}</p>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-2">
           {score && (
             <span className="font-heading font-bold text-sm px-2 py-0.5 border" style={{ borderColor: (GRADE_COLORS[score.grade] || '#858585') + '50', color: GRADE_COLORS[score.grade] || '#858585' }} data-testid={`grade-${agent.id}`}>
               {score.grade}
