@@ -1,6 +1,0 @@
-2026-05-28 17:36:39,995 - __main__ - WARNING - WARNING: Using local MongoDB. Switch to Atlas for production.
-INFO:     Started server process [249895]
-INFO:     Waiting for application startup.
-2026-05-28 17:36:43,371 - __main__ - WARNING - WARNING: MongoDB unavailable. Starting in degraded mode. localhost:27010: [Errno 111] Connection refused, Timeout: 3.0s, Topology Description: <TopologyDescription id: 6a187d27bfbc5e316244ed16, topology_type: Unknown, servers: [<ServerDescription ('localhost', 27010) server_type: Unknown, rtt: None, error=AutoReconnect('localhost:27010: [Errno 111] Connection refused')>]>
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)

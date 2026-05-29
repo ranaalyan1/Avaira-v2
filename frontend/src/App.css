@@ -143,6 +143,67 @@
 .stagger-4 { animation-delay: 0.2s; }
 .stagger-5 { animation-delay: 0.25s; }
 .stagger-6 { animation-delay: 0.3s; }
+.stagger-7 { animation-delay: 0.35s; }
+.stagger-8 { animation-delay: 0.4s; }
+.stagger-9 { animation-delay: 0.45s; }
+.stagger-10 { animation-delay: 0.5s; }
+
+/* Animations */
+@keyframes slide-in {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes floating {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+}
+
+@keyframes glitch {
+    0% { transform: translate(0); }
+    20% { transform: translate(-2px, 2px); }
+    40% { transform: translate(-2px, -2px); }
+    60% { transform: translate(2px, 2px); }
+    80% { transform: translate(2px, -2px); }
+    100% { transform: translate(0); }
+}
+
+@keyframes hologram {
+    0% { opacity: 0.8; }
+    50% { opacity: 0.4; }
+    100% { opacity: 0.8; }
+}
+
+@keyframes scan {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(100%); }
+}
+
+.animate-slide-in {
+    animation: slide-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+}
+
+.animate-floating {
+    animation: floating 3s ease-in-out infinite;
+}
+
+.animate-glitch {
+    animation: glitch 0.3s ease-in-out infinite;
+}
+
+.animate-hologram {
+    animation: hologram 2s ease-in-out infinite;
+}
+
+.animate-scan {
+    animation: scan 3s linear infinite;
+}
+
+.hover\:glow-red:hover {
+    filter: drop-shadow(0 0 12px rgba(255, 0, 60, 0.5));
+}
 
 /* Corner cut */
 .corner-cut {
