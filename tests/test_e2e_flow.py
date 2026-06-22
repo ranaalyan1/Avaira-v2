@@ -115,17 +115,21 @@ async def test_e2e_pivot_flow(client):
     # 2. Run approved task
     from backend.core.validator import ValidationResult
 
-    with patch('litellm.acompletion') as mock_acompletion, \
+    with patch('anthropic.AsyncAnthropic') as MockAsyncAnthropic, \
          patch('backend.agents.avaira_agent.AvairaValidator.fast_shield_pass') as mock_fast_pass:
 
+        mock_anthropic_instance = MockAsyncAnthropic.return_value
+        mock_anthropic_instance.messages.create = AsyncMock()
+
+        # Responses:
         # think() -> Intent JSON
-        mock_acompletion.side_effect = [
-            MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps({
+        mock_anthropic_instance.messages.create.side_effect = [
+            MagicMock(content=[MagicMock(text=json.dumps({
                 "action": "search", "target": "google", "parameters": {}, "estimated_value": 0.0,
                 "reasoning": "Thinking...", "self_assessment": {"within_envelope": True, "confidence": 1.0}
-            })))]),
+            }))]),
             # deep_neural_audit (Async task)
-            MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps({"approved": True, "reasoning": "No issues"})))])
+            MagicMock(content=[MagicMock(text=json.dumps({"approved": True, "reasoning": "No issues"}))])
         ]
 
         # validator Pass 1 -> Approved
@@ -142,17 +146,20 @@ async def test_e2e_pivot_flow(client):
         assert run_resp.json()["execution"]["status"] == "completed"
 
     # 3. Run deviating task -> Suspension
-    with patch('litellm.acompletion') as mock_acompletion, \
+    with patch('anthropic.AsyncAnthropic') as MockAsyncAnthropic, \
          patch('backend.agents.avaira_agent.AvairaValidator.fast_shield_pass') as mock_fast_pass:
 
+        mock_anthropic_instance = MockAsyncAnthropic.return_value
+        mock_anthropic_instance.messages.create = AsyncMock()
+
         # think() -> Malicious Intent
-        mock_acompletion.side_effect = [
-            MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps({
+        mock_anthropic_instance.messages.create.side_effect = [
+            MagicMock(content=[MagicMock(text=json.dumps({
                 "action": "destroy", "target": "world", "parameters": {}, "estimated_value": 1000.0,
                 "reasoning": "Evildoer", "self_assessment": {"within_envelope": False, "confidence": 1.0}
-            })))]),
+            }))]),
             # deep_neural_audit
-            MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps({"approved": False, "reasoning": "Confirmed Violation"})))])
+            MagicMock(content=[MagicMock(text=json.dumps({"approved": False, "reasoning": "Confirmed Violation"}))])
         ]
 
         # validator Pass 1 -> Blocked
