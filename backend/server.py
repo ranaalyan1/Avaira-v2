@@ -132,7 +132,6 @@ X_CLIENT_SECRET = os.environ.get("X_CLIENT_SECRET", "").strip()
 X_REDIRECT_URI = os.environ.get("X_REDIRECT_URI", "").strip()
 DEFAULT_POST_LOGIN_REDIRECT = os.environ.get("DEFAULT_POST_LOGIN_REDIRECT", "http://localhost:3000/dashboard").strip()
 ALLOWED_REDIRECT_ORIGINS = {origin.strip() for origin in os.environ.get("ALLOWED_REDIRECT_ORIGINS", "http://localhost:3000").split(",") if origin.strip()}
-LOCAL_ONLY_MODE = os.environ.get("LOCAL_ONLY_MODE", "false").lower() == "true"
 RATE_LIMIT_STATE: Dict[str, List[float]] = {}
 RATE_LIMIT_LOCK = asyncio.Lock()
 RATE_LIMIT_LAST_SWEEP = 0.0
@@ -782,9 +781,8 @@ async def register_agent(body: AgentCreate, request: Request):
     }
     await db.agents.insert_one(agent)
 
-    # Initial Autonomous Policy Evolution (APE) sync - Skip if local only to avoid external calls
-    if not LOCAL_ONLY_MODE:
-        await ape_engine.sync_threat_intelligence(agent_id)
+    # Initial Autonomous Policy Evolution (APE) sync
+    await ape_engine.sync_threat_intelligence(agent_id)
 
     agent.pop("_id", None)
     return {"agent_id": agent_id, "api_key": api_key}
@@ -898,7 +896,6 @@ async def create_execution_request(body: ExecutionRequestCreate):
     })
 
     # Step 4: Deduct fee
-    # In LOCAL_ONLY_MODE, we skip external treasury recording if it involves cloud APIs
     fee = round(body.value * PROTOCOL_FEE_RATE, 6)
     execution["fee_deducted"] = fee
     execution["lifecycle"].append({
@@ -913,8 +910,7 @@ async def create_execution_request(body: ExecutionRequestCreate):
     execution.pop("_id", None)
 
     # Update treasury
-    if not LOCAL_ONLY_MODE:
-        await record_treasury_transaction(execution["id"], fee)
+    await record_treasury_transaction(execution["id"], fee)
 
     # Update reputation
     await update_reputation(body.agent_id, REP_SUCCESS_BONUS, "Successful execution")
