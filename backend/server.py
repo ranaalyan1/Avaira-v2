@@ -1,5 +1,4 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Query, Request, Depends
-from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -58,17 +57,16 @@ except ImportError:
     from .agents.avaira_agent import AvairaAgent as RealAvairaAgent
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
 
-def _get_required_env(name: str) -> str:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
+try:
+    from app.config import get_settings
+except ImportError:
+    from .app.config import get_settings
 
+settings = get_settings()
 
-mongo_url = _get_required_env("MONGO_URL")
-db_name = _get_required_env("DB_NAME")
+mongo_url = settings.MONGO_URL
+db_name = settings.DB_NAME
 client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=3000)
 db = client[db_name]
 api_router = APIRouter(prefix="/api")
@@ -106,11 +104,11 @@ SUBSCRIPTION_TIERS = {
     'enterprise': {'price': 2000, 'max_agents': -1, 'features': ['unlimited_agents', 'custom_risk', 'compliance_reports', 'dedicated_pool']}
 }
 
-AGENT_REGISTRY_ADDRESS = os.environ.get("AGENT_REGISTRY_ADDRESS", "")
-EXECUTION_WALLET_ADDRESS = os.environ.get("EXECUTION_WALLET_ADDRESS", "")
-FREEZE_SLASH_ADDRESS = os.environ.get("FREEZE_SLASH_ADDRESS", "")
-TREASURY_ADDRESS = os.environ.get("TREASURY_ADDRESS", "")
-REPUTATION_ENGINE_ADDRESS = os.environ.get("REPUTATION_ENGINE_ADDRESS", "")
+AGENT_REGISTRY_ADDRESS = settings.AGENT_REGISTRY_ADDRESS
+EXECUTION_WALLET_ADDRESS = settings.EXECUTION_WALLET_ADDRESS
+FREEZE_SLASH_ADDRESS = settings.FREEZE_SLASH_ADDRESS
+TREASURY_ADDRESS = settings.TREASURY_ADDRESS
+REPUTATION_ENGINE_ADDRESS = settings.REPUTATION_ENGINE_ADDRESS
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -118,20 +116,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 if "localhost" in mongo_url.lower():
     logger.warning("WARNING: Using local MongoDB. Switch to Atlas for production.")
 
-AVAIRA_ADMIN_KEY = os.environ.get("AVAIRA_ADMIN_KEY", "")
-PERMIT_SECRET = _get_required_env("PERMIT_SECRET")
-ADMIN_EMAILS = {email.strip().lower() for email in os.environ.get("ADMIN_EMAILS", "").split(",") if email.strip()}
-COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
+AVAIRA_ADMIN_KEY = settings.AVAIRA_ADMIN_KEY
+PERMIT_SECRET = settings.PERMIT_SECRET
+ADMIN_EMAILS = {email.strip().lower() for email in settings.ADMIN_EMAILS.split(",") if email.strip()}
+COOKIE_SECURE = settings.COOKIE_SECURE
 COOKIE_SAMESITE = "none" if COOKIE_SECURE else "lax"
-SESSION_MAX_AGE_SECONDS = int(os.environ.get("SESSION_MAX_AGE_SECONDS", str(7 * 24 * 60 * 60)))
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
-GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "").strip()
-X_CLIENT_ID = os.environ.get("X_CLIENT_ID", "").strip()
-X_CLIENT_SECRET = os.environ.get("X_CLIENT_SECRET", "").strip()
-X_REDIRECT_URI = os.environ.get("X_REDIRECT_URI", "").strip()
-DEFAULT_POST_LOGIN_REDIRECT = os.environ.get("DEFAULT_POST_LOGIN_REDIRECT", "http://localhost:3000/dashboard").strip()
-ALLOWED_REDIRECT_ORIGINS = {origin.strip() for origin in os.environ.get("ALLOWED_REDIRECT_ORIGINS", "http://localhost:3000").split(",") if origin.strip()}
+SESSION_MAX_AGE_SECONDS = settings.SESSION_MAX_AGE_SECONDS
+GOOGLE_CLIENT_ID = settings.GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET = settings.GOOGLE_CLIENT_SECRET
+GOOGLE_REDIRECT_URI = settings.GOOGLE_REDIRECT_URI
+X_CLIENT_ID = settings.X_CLIENT_ID
+X_CLIENT_SECRET = settings.X_CLIENT_SECRET
+X_REDIRECT_URI = settings.X_REDIRECT_URI
+DEFAULT_POST_LOGIN_REDIRECT = settings.DEFAULT_POST_LOGIN_REDIRECT
+ALLOWED_REDIRECT_ORIGINS = {origin.strip() for origin in settings.ALLOWED_REDIRECT_ORIGINS.split(",") if origin.strip()}
 RATE_LIMIT_STATE: Dict[str, List[float]] = {}
 RATE_LIMIT_LOCK = asyncio.Lock()
 RATE_LIMIT_LAST_SWEEP = 0.0
@@ -1975,7 +1973,7 @@ async def health_check():
         "status": "ok" if db_ok == "ok" else "degraded",
         "version": "1.0.0",
         "db": db_ok,
-        "chain": "mainnet" if os.environ.get("CHAIN_ID", "43114") == "43114" else "fuji",
+        "chain": "mainnet" if settings.CHAIN_ID == "43114" else "fuji",
     }
 
 # ─── ROOT ────────────────────────────────────────────────────────
@@ -1992,7 +1990,7 @@ async def database_guard(request: Request, call_next):
         return JSONResponse({"detail": "Database unavailable"}, status_code=503)
     return await call_next(request)
 
-cors_origins = [origin.strip() for origin in os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',') if origin.strip()]
+cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(',') if origin.strip()]
 allow_credentials = '*' not in cors_origins
 if not allow_credentials:
     logger.warning("CORS_ORIGINS includes '*'; credentialed cross-origin requests are disabled.")

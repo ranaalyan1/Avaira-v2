@@ -124,3 +124,4 @@ websockets==15.0.1
 yarl==1.23.0
 zipp==3.23.0
 anthropic>=0.45.2
+pydantic-settings==2.14.2

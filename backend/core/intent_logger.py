@@ -9,6 +9,11 @@ from pydantic import BaseModel, Field
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from motor.motor_asyncio import AsyncIOMotorClient
+try:
+    from app.config import get_settings
+except ImportError:
+    from ..app.config import get_settings
+
 from .witness_network import WitnessNetwork, WitnessSignature
 
 class LogEntry(BaseModel):
@@ -48,16 +53,17 @@ class IntentLogger:
     _locks: Dict[str, asyncio.Lock] = {}
 
     def __init__(self, db_client=None):
+        settings = get_settings()
         if db_client is None:
-            mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
-            db_name = os.environ.get("DB_NAME", "avaira")
+            mongo_url = settings.MONGO_URL
+            db_name = settings.DB_NAME
             self.client = AsyncIOMotorClient(mongo_url)
             self.db = self.client[db_name]
         else:
             self.db = db_client
 
         self.collection = self.db.intent_logs
-        self.secret = os.environ.get("AVAIRA_LOG_SECRET", "default_secret_32_bytes_long_!!!!!")
+        self.secret = settings.AVAIRA_LOG_SECRET
         self.key = hashlib.sha256(self.secret.encode()).digest()
         self.aesgcm = AESGCM(self.key)
         self.witness_net = WitnessNetwork()

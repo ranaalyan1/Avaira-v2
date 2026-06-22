@@ -17,12 +17,17 @@ setup:
 	@command -v node  >/dev/null || (echo "ERROR: Node.js 18+ required" && exit 1)
 	@command -v python3 >/dev/null || (echo "ERROR: Python 3.11+ required" && exit 1)
 	@command -v docker >/dev/null || (echo "ERROR: Docker required" && exit 1)
-	@cp -n backend/.env.example backend/.env 2>/dev/null && echo "Created backend/.env" || echo "backend/.env exists"
+	@cd backend && pip install -r requirements.txt -q
+	@if [ ! -f backend/.env ]; then \
+		echo "Generating backend/.env with secure secrets..."; \
+		python3 backend/scripts/generate_secrets.py; \
+	else \
+		echo "backend/.env exists"; \
+	fi
 	@cp -n frontend/.env.example frontend/.env 2>/dev/null && echo "Created frontend/.env" || true
-	cd backend && pip install -r requirements.txt -q
-	cd frontend && yarn install --silent
+	@cd frontend && yarn install --silent
 	@echo ""
-	@echo "✓ Setup complete. Edit .env files, then run: make dev"
+	@echo "✓ Setup complete. Edit .env files (specifically AI model keys), then run: make dev"
 
 lint:
 	cd backend && black --check . && python -m flake8 . --max-line-length=120 --exclude=__pycache__
