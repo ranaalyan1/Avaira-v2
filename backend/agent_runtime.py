@@ -1,5 +1,7 @@
 from __future__ import annotations
-
+import os
+import litellm
+import json
 from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,9 +30,35 @@ class AvairaAgent:
         self.agent_address = agent_address
         self.risk_envelope = risk_envelope if isinstance(risk_envelope, RuntimeRiskEnvelope) else RuntimeRiskEnvelope.model_validate(risk_envelope)
         self.mission_goal = mission_goal
+        self.local_only = os.environ.get("LOCAL_ONLY_MODE", "false").lower() == "true"
+        self.model = os.environ.get("AGENT_MODEL", "anthropic/claude-3-5-sonnet-20241022")
 
     async def think(self, market_context: dict, history: list) -> ExecutionIntent:
+        if self.local_only:
+            # Enhanced local reasoning for research mode
+            return await self._ai_think(market_context, history)
         return self._planned_intent(market_context, history)
+
+    async def _ai_think(self, market_context: dict, history: list) -> ExecutionIntent:
+        prompt = f"""
+        Research Context: {self.mission_goal}
+        Market Data: {json.dumps(market_context)}
+        History: {json.dumps(history)}
+
+        Reason about the best next action within these boundaries: {json.dumps(self.risk_envelope.model_dump())}
+
+        Return JSON with: action, target, value_usd, rationale, confidence.
+        """
+
+        resp = await litellm.acompletion(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500,
+            response_format={"type": "json_object"}
+        )
+
+        data = json.loads(resp.choices[0].message.content)
+        return ExecutionIntent(**data)
 
     def validate(self, intent: ExecutionIntent) -> dict:
         if intent.value_usd > self.risk_envelope.max_tx_value:

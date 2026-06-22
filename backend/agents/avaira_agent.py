@@ -2,7 +2,7 @@ import json
 import os
 import uuid
 import asyncio
-import anthropic
+import litellm
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 from pydantic import BaseModel
@@ -44,7 +44,7 @@ class AvairaAgent:
     def __init__(self, agent_id: str, risk_envelope: dict, db_client=None):
         self.agent_id = agent_id
         self.risk_envelope = risk_envelope
-        self.client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        self.model = os.environ.get("AGENT_MODEL", "anthropic/claude-3-5-sonnet-20241022")
         self.validator = AvairaValidator()
         self.logger = IntentLogger(db_client=db_client)
         self.reputation = ReputationEngine(db_client=db_client)
@@ -75,14 +75,16 @@ class AvairaAgent:
         }}
         """
 
-        resp = await self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+        resp = await litellm.acompletion(
+            model=self.model,
             max_tokens=1000,
-            system=system_prompt,
-            messages=[{"role": "user", "content": task}]
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": task}
+            ]
         )
 
-        data = json.loads(resp.content[0].text)
+        data = json.loads(resp.choices[0].message.content)
         return ExecutionIntent(**data)
 
     async def run(self, task: str) -> RunResult:

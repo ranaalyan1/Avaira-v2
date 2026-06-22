@@ -1,6 +1,6 @@
 import json
 import time
-import anthropic
+import litellm
 import os
 import uuid
 from typing import List, Optional, Dict, Any
@@ -28,8 +28,7 @@ class ValidationResult(BaseModel):
 class AvairaValidator:
     def __init__(self):
         self.api_key = os.environ.get("ANTHROPIC_API_KEY")
-        self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
-        self.model = "claude-3-5-sonnet-20241022"
+        self.model = os.environ.get("DEFAULT_MODEL", "anthropic/claude-3-5-sonnet-20241022")
         self.slm = ShieldSLM()
         self.rules = ShieldRules()
 
@@ -83,17 +82,19 @@ class AvairaValidator:
     async def deep_neural_audit(self, intent: dict, risk_envelope: dict, audit_id: str, db=None) -> ValidationStage:
         """
         STAGE 2: Deep Neural Audit (Async/Parallel)
-        Deep compliance check using Claude 3.5.
+        Deep compliance check using configured model via LiteLLM.
         """
         start_time = time.time()
         try:
-            compliance_resp = await self.client.messages.create(
+            compliance_resp = await litellm.acompletion(
                 model=self.model,
                 max_tokens=1000,
-                system="Return ONLY valid JSON.",
-                messages=[{"role": "user", "content": f"Review this intent against envelope: {json.dumps(risk_envelope)} | Intent: {json.dumps(intent)}"}]
+                messages=[
+                    {"role": "system", "content": "Return ONLY valid JSON."},
+                    {"role": "user", "content": f"Review this intent against envelope: {json.dumps(risk_envelope)} | Intent: {json.dumps(intent)}"}
+                ]
             )
-            compliance_data = self._extract_json(compliance_resp.content[0].text)
+            compliance_data = self._extract_json(compliance_resp.choices[0].message.content)
 
             approved = compliance_data.get("approved", False)
             findings = compliance_data.get("reasoning", "Audit complete")

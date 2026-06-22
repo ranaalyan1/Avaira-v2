@@ -13,7 +13,7 @@ const MOATS = [
   { icon: Lock, title: "REGULATORY CAPTURE", desc: "Define the standard before regulators do. Regulation doesn't kill you. Regulation IS you." },
   { icon: Users, title: "THREE-SIDED NETWORK", desc: "Agents + Underwriters + Enterprises. Three-sided network effects are nearly impossible to replicate." },
   { icon: Shield, title: "SWITCHING COSTS", desc: "Behavioral history, Avaira Score, insurance coverage, enterprise contracts. Switching cost: 6+ months. Nobody switches." },
-  { icon: Globe, title: "AVALANCHE L1", desc: "Sub-200ms finality. Sovereign rules. Custom gas economics. The speed required to be a real-time circuit breaker." },
+  { icon: Globe, title: "HIGH-PERFORMANCE INFRASTRUCTURE", desc: "Sub-200ms finality. Sovereign rules. Optimized execution. The speed required to be a real-time circuit breaker." },
 ];
 
 const REVENUE = [
@@ -95,7 +95,7 @@ export default function Landing() {
             <span className="text-avaira-primary" style={{ textShadow: '0 0 30px rgba(232,68,68,0.3)' }}>3 Lines of Python</span>
           </h1>
           <p className="font-body text-base sm:text-lg text-avaira-muted mt-6 max-w-2xl leading-relaxed">
-            No crypto. No wallet. No gas. Avaira gives your agents a public reputation score, a tamper-evident audit trail, and automatic consequences for bad behavior.
+            High-Performance. Software-Defined. Enterprise-Ready. Avaira gives your agents a public reputation score, a tamper-evident audit trail, and automatic consequences for bad behavior.
           </p>
           <div className="flex items-center gap-4 mt-8">
             <button
@@ -171,7 +171,7 @@ export default function Landing() {
               { step: "02", label: "DECLARE", desc: "Submit mission intent" },
               { step: "03", label: "VALIDATE", desc: "Risk envelope check" },
               { step: "04", label: "PERMIT", desc: "EIP-712 signed" },
-              { step: "05", label: "EXECUTE", desc: "On-chain settlement" },
+              { step: "05", label: "EXECUTE", desc: "Verified Execution" },
               { step: "06", label: "SETTLE", desc: "Fees split 85/10/5" },
             ].map((s) => (
               <div key={s.step} className="execution-step-card p-3 border border-avaira-border bg-avaira-bg/90 relative group" data-testid={`step-${s.step}`}>
