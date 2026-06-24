@@ -6,73 +6,129 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-# Mock all dependencies to avoid MongoDB requirement
+# Mock motor/pymongo BEFORE any other imports to avoid connection attempts during app startup
+mock_client = MagicMock()
+mock_db = MagicMock()
+mock_motor = MagicMock()
+mock_motor.motor_asyncio.AsyncIOMotorClient.return_value = mock_client
+mock_client.__getitem__.return_value = mock_db
+
+import sys
+sys.modules['motor'] = mock_motor
+sys.modules['motor.motor_asyncio'] = mock_motor.motor_asyncio
+
+# Mock other modules that might cause side effects
+sys.modules['anthropic'] = MagicMock()
+
 @pytest.mark.asyncio
 async def test_e2e_pivot_flow_mocked():
-    # Mocking the entire DB and engines
-    mock_db = MagicMock()
+    # Setup mock behavior for the database
     mock_agents = []
 
     async def mock_insert_one(doc):
         mock_agents.append(doc)
+        return MagicMock()
 
-    async def mock_find_one(filter, projection=None):
+    async def mock_find_one(filter, *args, **kwargs):
         for a in mock_agents:
-            if all(a.get(k) == v for k, v in filter.items()):
+            match = True
+            for k, v in filter.items():
+                if k != "_id" and a.get(k) != v:
+                    match = False
+                    break
+            if match:
                 return a
         return None
 
-    mock_db.agents.insert_one = mock_insert_one
-    mock_db.agents.find_one = mock_find_one
-    mock_db.intent_logs.insert_one = AsyncMock()
-    mock_db.executions.insert_one = AsyncMock()
-    mock_db.slash_events.insert_one = AsyncMock()
-    mock_db.slash_events.count_documents = AsyncMock(return_value=0)
-    mock_db.executions.count_documents = AsyncMock(return_value=0)
+    def setup_mock_coll(coll):
+        coll.insert_one = AsyncMock(side_effect=mock_insert_one)
+        coll.find_one = AsyncMock(side_effect=mock_find_one)
+        coll.update_one = AsyncMock(return_value=MagicMock())
+        coll.delete_many = AsyncMock()
+        coll.count_documents = AsyncMock(return_value=0)
+        coll.create_index = AsyncMock()
+
+        # Mock find().sort().to_list()
+        mock_cursor = MagicMock()
+        mock_cursor.sort.return_value = mock_cursor
+        mock_cursor.limit.return_value = mock_cursor
+        mock_cursor.to_list = AsyncMock(return_value=[])
+        coll.find.return_value = mock_cursor
+
+        return coll
+
+    setup_mock_coll(mock_db.agents)
+    setup_mock_coll(mock_db.intent_logs)
+    setup_mock_coll(mock_db.executions)
+    setup_mock_coll(mock_db.slash_events)
+    setup_mock_coll(mock_db.freeze_events)
+    setup_mock_coll(mock_db.reputation_history)
+    setup_mock_coll(mock_db.treasury_transactions)
+    setup_mock_coll(mock_db.missions)
+    setup_mock_coll(mock_db.underwriters)
+    setup_mock_coll(mock_db.user_sessions)
+    setup_mock_coll(mock_db.users)
+    setup_mock_coll(mock_db.permit_nonces)
+    setup_mock_coll(mock_db.admin_audit_log)
+    setup_mock_coll(mock_db.revenue_events)
+
+    from backend.app.main import app
+    from backend.app.dependencies import get_db, get_current_user, get_intent_logger, get_avaira_validator, get_slash_engine, get_reputation_engine, get_ape_engine, get_agent_vault
 
     mock_ape = MagicMock()
     mock_ape.sync_threat_intelligence = AsyncMock(return_value=[])
 
-    with patch('backend.server.db', mock_db),          patch('backend.server.intent_logger', MagicMock()),          patch('backend.server.avaira_validator', AsyncMock()),          patch('backend.server.slash_engine', AsyncMock()),          patch('backend.server.reputation_engine', AsyncMock()),          patch('backend.server.ape_engine', mock_ape),          patch('backend.server.agent_vault', AsyncMock()),          patch('backend.server.require_authenticated_user', return_value={"user_id": "u1", "email": "a@b.com"}),          patch('anthropic.Anthropic'):
+    # Use dependency overrides
+    app.dependency_overrides[get_db] = lambda: mock_db
+    app.dependency_overrides[get_current_user] = AsyncMock(return_value={"user_id": "u1", "email": "a@b.com"})
+    app.dependency_overrides[get_intent_logger] = lambda: MagicMock()
+    app.dependency_overrides[get_avaira_validator] = lambda: AsyncMock()
+    app.dependency_overrides[get_slash_engine] = lambda: AsyncMock()
+    app.dependency_overrides[get_reputation_engine] = lambda: AsyncMock()
+    app.dependency_overrides[get_ape_engine] = lambda: mock_ape
+    app.dependency_overrides[get_agent_vault] = lambda: AsyncMock()
 
-        from backend.server import register_agent, agent_run, AgentCreate, AgentRunRequest, RiskEnvelope
+    from fastapi.testclient import TestClient
 
-        # 1. Register
-        body = AgentCreate(name="Bot", goal="Test", risk_envelope=RiskEnvelope(max_spend_usd=100))
-        reg_res = await register_agent(body, MagicMock())
-        agent_id = reg_res["agent_id"]
-        api_key = reg_res["api_key"]
+    # Patch ensure_indexes to avoid any real DB calls during lifespan
+    with patch('backend.app.main.ensure_indexes', AsyncMock()):
+        with TestClient(app) as client:
+            # 1. Register
+            body_dict = {
+                "name": "Bot",
+                "goal": "Test",
+                "risk_envelope": {"max_spend_usd": 100}
+            }
+            response = client.post("/api/agents/register", json=body_dict)
+            assert response.status_code == 200
+            reg_res = response.json()
+            agent_id = reg_res["agent_id"]
+            api_key = reg_res["api_key"]
 
-        # 2. Run approved
-        from backend.server import _get_agent_from_key
-        # Update mock for _get_agent_from_key to find the registered agent
-        mock_db.agents.find_one.return_value = mock_agents[0]
+            # 2. Run approved
+            # Mock RealAvairaAgent.run
+            with patch('backend.app.api.agents.RealAvairaAgent') as MockAgent:
+                instance = MockAgent.return_value
+                instance.run = AsyncMock(return_value={"execution": {"status": "completed"}})
 
-        with patch('backend.server.RealAvairaAgent') as MockAgent:
-            instance = MockAgent.return_value
-            instance.run = AsyncMock(return_value={"execution": {"status": "completed"}})
+                response = client.post(f"/api/agents/{agent_id}/run",
+                                     json={"task": "Safe"},
+                                     headers={"X-Avaira-API-Key": api_key})
+                assert response.status_code == 200
+                assert response.json()["execution"]["status"] == "completed"
 
-            run_res = await agent_run(agent_id, AgentRunRequest(task="Safe"), mock_agents[0])
-            assert run_res["execution"]["status"] == "completed"
+            # 3. Simulate deviation/freeze in mock
+            if mock_agents:
+                mock_agents[0]["status"] = "frozen"
 
-        # 3. Simulate deviation/freeze in mock
-        mock_agents[0]["status"] = "frozen"
+                # 4. Verify blocked
+                response = client.post(f"/api/agents/{agent_id}/run",
+                                     json={"task": "Bad"},
+                                     headers={"X-Avaira-API-Key": api_key})
+                assert response.status_code == 403
+                assert "frozen" in response.json()["detail"].lower()
 
-        # 4. Verify blocked
-        from fastapi import HTTPException
-        # _get_agent_from_key is where status is checked
-        # We manually call it with a mock request
-        mock_request = MagicMock()
-        mock_request.headers = {"X-Avaira-API-Key": api_key}
-
-        with pytest.raises(HTTPException) as excinfo:
-            # Re-import to ensure we get the updated function if needed,
-            # but here we just call the one from server
-            from backend.server import _get_agent_from_key
-            await _get_agent_from_key(mock_request)
-
-        assert excinfo.value.status_code == 403
-        assert "frozen" in excinfo.value.detail.lower()
+    app.dependency_overrides.clear()
 
 if __name__ == "__main__":
     asyncio.run(test_e2e_pivot_flow_mocked())

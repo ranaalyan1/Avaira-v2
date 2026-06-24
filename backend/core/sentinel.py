@@ -24,9 +24,10 @@ class AvairaSentinel:
 
     async def analyze_drift(self, agent_id: str, current_intent: Dict[str, Any]) -> DriftAnalysis:
         # 1. Fetch recent history
-        history = await self.db.executions.find(
+        cursor = self.db.executions.find(
             {"agent_id": agent_id, "status": "completed"}
-        ).sort("timestamp", -1).limit(5).to_list(None)
+        ).sort("timestamp", -1).limit(5)
+        history = await cursor.to_list(None)
 
         if not history:
             return DriftAnalysis(
