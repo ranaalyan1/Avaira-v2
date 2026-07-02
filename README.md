@@ -1,4 +1,4 @@
-# AVAIRA — Trust Infrastructure for AI Agents
+# AVAIRA Trust and accountability Infrastructure for AI Agents
 
 > Every action validated. Every deviation logged. Every reputation score public and queryable.
 
