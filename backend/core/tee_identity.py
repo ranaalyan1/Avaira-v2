@@ -67,13 +67,31 @@ class TEEIdentityManager:
 
     def verify_attestation(self, did_doc: AvairaDID) -> bool:
         """
-        Verifies that the DID was indeed minted inside a valid TEE.
+        Verifies that the DID was indeed minted inside a valid TEE with strict schema validation.
         """
         att = did_doc.attestation
+
+        # Strict JSON Schema / Format validation
+        if not att.enclave_id or not att.enclave_id.startswith("nitro-"):
+            return False
+        if len(att.pcr0) != 64 or len(att.pcr1) != 64 or len(att.pcr2) != 64:
+            return False
+        if len(att.signature) != 64:
+            return False
+
+        # Validate timestamp freshness / ISO 8601 format
+        try:
+            att_dt = datetime.fromisoformat(att.timestamp)
+            # Timestamp must be in past or within acceptable skew (300 seconds)
+            now = datetime.now(timezone.utc)
+            if att_dt > now and (att_dt - now).total_seconds() > 300:
+                return False
+        except (ValueError, TypeError):
+            return False
+
         payload = f"{did_doc.did}|{att.pcr0}|{att.pcr1}|{att.pcr2}|{att.timestamp}"
         expected_sig = hashlib.sha3_256((payload + self.secret).encode()).hexdigest()
 
-        # In a real TEE, we would also verify the PCR0 measurement against a known good value
         known_pcr0 = hashlib.sha256(b"avaira-runtime-v2-core").hexdigest()
 
         return (expected_sig == att.signature) and (att.pcr0 == known_pcr0)
