@@ -14,6 +14,7 @@ import Treasury from "@/pages/Treasury";
 import Reputation from "@/pages/Reputation";
 import Underwriters from "@/pages/Underwriters";
 import SDKDocs from "@/pages/SDKDocs";
+import HardeningReport from "@/pages/HardeningReport";
 import { Toaster } from "sonner";
 import { API } from "@/lib/api";
 
@@ -51,6 +52,7 @@ function AppRoutes() {
           <Route path="/treasury" element={<Treasury />} />
           <Route path="/reputation" element={<Reputation />} />
           <Route path="/underwriters" element={<Underwriters />} />
+          <Route path="/hardening-report" element={<HardeningReport />} />
           <Route path="/sdk" element={<SDKDocs />} />
         </Route>
         <Route path="*" element={<NotFound />} />
