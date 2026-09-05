@@ -30,11 +30,29 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
       - run: pip install -r backend/requirements.txt pytest pytest-asyncio pytest-cov --break-system-packages
-      - run: pytest tests/test_backend_units.py tests/test_v2_core.py -q --tb=short
+      - run: pytest tests/test_backend_units.py tests/test_v2_core.py tests/test_cognitive_os.py -q --tb=short
         env:
           MONGO_URL: mongodb://localhost:27017
           DB_NAME: avaira_test
           PERMIT_SECRET: test-secret-32-chars-minimum-here
+
+  cognitive-os:
+    name: Cognitive OS v5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install test deps (full suite + demos need the pinned backend deps)
+        run: pip install -r backend/requirements.txt pytest pytest-asyncio --break-system-packages
+      - name: Cognitive OS test suite (21 offline tests)
+        run: pytest tests/test_cognitive_os.py -q --tb=short
+      - name: Deterministic proof artifacts (must run twice, byte-identical)
+        run: |
+          python -m avaira_os.demos > /tmp/demos_1.txt
+          python -m avaira_os.demos > /tmp/demos_2.txt
+          diff /tmp/demos_1.txt /tmp/demos_2.txt
+          tail -7 /tmp/demos_1.txt
 
   frontend:
     name: Frontend

@@ -41,6 +41,24 @@ print(result["status"]) # 'completed' or 'blocked'
 
 ---
 
+## 🛡 Avaira Cognitive OS v5.0 — Hardened Execution Layer
+
+Beyond the hosted governance API, Avaira ships a **Cognitive Kernel**: a local,
+deterministic, offline execution layer where safety is *mathematically proven*
+before any action runs. Plans must carry a complete System-2 reasoning trace,
+an interval-arithmetic prover plus a 200× Monte-Carlo shadow sandbox must
+certify them `SAFE`, a TEE-attested boolean gate must approve the signed
+certificate, and violations burn stake atomically — locally and on-chain.
+Every state transition lands in a hash-chained Cognitive Ledger.
+
+```bash
+python -m avaira_os.demos   # 4 deterministic proof artifacts, runnable offline
+```
+
+See [docs/cognitive-os-v5.md](docs/cognitive-os-v5.md) for the full architecture.
+
+---
+
 ## ⭐ The Avaira Score
 
 Every agent builds a verifiable reputation score (0-100) based on:
